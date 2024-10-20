@@ -1,0 +1,6 @@
+[submodule "nugget"]
+	path = nugget
+	url = https://github.com/pcsx-redux/nugget
+[submodule "decomp/tools/maspsx"]
+	path = decomp/tools/maspsx
+	url = git@github.com:mkst/maspsx.git

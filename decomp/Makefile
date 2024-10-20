@@ -1,0 +1,111 @@
+PSYQ_VER	:= 400
+AS			:= mipsel-linux-gnu-as
+CC			:= ./bin/cc1-psx-272
+CPP			:= mipsel-linux-gnu-cpp
+LD			:= mipsel-linux-gnu-ld
+OBJCOPY		:= mipsel-linux-gnu-objcopy
+ASFLAGS		:= -Iinclude -march=r3000 -mtune=r3000 -no-pad-sections -O1 -G0
+CPPFLAGS	:= -Iinclude -Iinclude/og -Wno-builtin-declaration-mismatch
+CPPFLAGS	+= -Dmips -D__OPTIMIZE__ -D__mips__ -D__mips -Dpsx -D__psx__ -D__psx -D_PSYQ -D__EXTENSIONS__ -D_MIPSEL -D_LANGUAGE_C -DLANGUAGE_C
+CFLAGS		:= -G0 -w -O2 -g -fno-builtin -funsigned-char -fpeephole -ffunction-cse -fpcc-struct-return -fcommon -fverbose-asm -msoft-float -g
+MASPSX      := python3 tools/maspsx/maspsx.py --expand-div --aspsx-version=2.56
+
+LIBS_350    := libapi libc libcd libcard libcomb libetc libgpu libgs libgte
+LIBS_350    += libgun libmath libpress libsnd libspu libtap
+LIBS_360    := libapi libc libcd libcard libcomb libetc libgpu libgs libgte
+LIBS_360    += libgun libmath libpress libsnd libspu libtap
+LIBS_400    := libapi libc2 libcd libcard libcomb libds libetc libgpu libgs libgte
+LIBS_400    += libgun libmath libmcrd libpress libsio libsnd libspu libtap
+LIBS_470	:= libapi libc2 libcd libcard libcomb libds libetc libgpu libgs libgte
+LIBS_470	+= libgun libhmd libmath libmcrd libmcx libpad libpress libsio libsnd libspu libtap
+LIBS		:= $(LIBS_$(PSYQ_VER))
+
+SRCS := $(foreach lib,$(LIBS),$(wildcard src/$(lib)/*.c))
+OBJS := $(patsubst src/%.c,build/src/%.c.o,$(SRCS))
+ASM_SRCS := $(wildcard asm/data/*.s) $(foreach lib,$(LIBS),$(wildcard asm/data/$(lib)/*.s))
+ASM_OBJS := $(patsubst asm/%.s,build/asm/%.s.o,$(ASM_SRCS))
+
+.PHONY: build
+build: build/psyq$(PSYQ_VER).elf
+
+all:
+	make build/psyq$(PSYQ_VER).ld -j
+	make expected -j
+
+dependencies: tools/maspsx/maspsx.py bin/cc1-psx-272
+	cd sdk && make psyq400
+	make include/og/libgpu.h
+
+.PHONY: clean
+clean:
+	git clean -xfd obj/
+	git clean -xfd build/
+	git clean -xfd asm/
+	git clean -xfd assets/
+	rm *.elf* || true
+	rm *.map || true
+	rm undefined_*_auto*.txt || true
+
+.PHONY: expected
+expected: build/psyq$(PSYQ_VER).elf
+	rm -rf expected/ || true
+	mkdir -p expected
+	cp -r build expected/
+
+build/psyq$(PSYQ_VER).elf: build/psyq$(PSYQ_VER).ld $(OBJS) $(ASM_OBJS) $(ASSETS_OBJS)
+	$(LD) -o $@.intermediate -Map=build/psyq$(PSYQ_VER).map \
+		-T symbols.$(PSYQ_VER).bss.txt \
+		-T undefined_funcs_auto.$(PSYQ_VER).txt undefined_syms_auto.$(PSYQ_VER).txt -T $< \
+		$(OBJS) $(ASM_OBJS)
+	$(OBJCOPY) -O binary $@.intermediate $@
+	rm $@.intermediate
+	sha256sum -c psyq$(PSYQ_VER).elf.sha256
+build/src/%.c.o: src/%.c
+	mkdir -p $(dir $@)
+	$(CPP) $(CPPFLAGS) -lang-c $< | $(CC) $(CFLAGS) -quiet | $(MASPSX) | $(AS) $(ASFLAGS) -o $@
+build/asm/%.s.o: asm/%.s
+	mkdir -p $(dir $@)
+	$(AS) $(ASFLAGS) -o $@ $<
+
+build/psyq$(PSYQ_VER).ld: splat$(PSYQ_VER).yaml psyq$(PSYQ_VER).elf.sha256 symbols.$(PSYQ_VER).txt
+	rm $@ || true
+	rm -rf asm/
+	rm -rf build/asm
+	rm -rf build/src
+	splat split $<
+psyq$(PSYQ_VER).elf.sha256: psyq$(PSYQ_VER).elf
+	mv $< build/
+	sha256sum build/$< > $@
+	mv build/$< ./
+psyq$(PSYQ_VER).elf: $(patsubst %,obj/$(PSYQ_VER)/%, $(LIBS))
+	./rm-o-dups-$(PSYQ_VER).sh
+	./psyq-gen.sh $(PSYQ_VER)
+	mkdir -p build
+	mv psyq$(PSYQ_VER).elf build/
+	sha256sum build/psyq$(PSYQ_VER).elf > psyq$(PSYQ_VER).elf.sha256
+	mv build/psyq$(PSYQ_VER).elf ./
+obj/$(PSYQ_VER)/lib%: sdk/psyq$(PSYQ_VER) bin/psyqdump
+	mkdir -p $@ && \
+		bin/psyqdump $</LIB/LIB$(shell echo $* | tr '[:lower:]' '[:upper:]').LIB $@ || \
+		rm -r $@
+	@for file in $@/*.OBJ; do \
+		output="$$(echo $${file%.OBJ}.o | tr '[:upper:]' '[:lower:]')"; \
+		bin/psyq-obj-parser "$$file" -o "$$output"; \
+	done
+include/og/libgpu.h: sdk/psyq$(PSYQ_VER) bin/psyq2elf
+	mkdir -p include/og
+	cd bin/psyq2elf && ./psyqinc.sh ../../$</INCLUDE ../../include/og
+bin/psyqdump: bin/psyq2elf
+	cd bin/psyq2elf && make
+	cp bin/psyq2elf/psyqdump bin/
+bin/psyq2elf:
+	git clone --depth 1 https://gitlab.com/jype/psyq2elf.git bin/psyq2elf
+bin/cc1-psx-272:
+	wget -O bin/gcc-2.7.2-psx.tar.gz https://github.com/decompals/old-gcc/releases/download/0.13/gcc-2.7.2-psx.tar.gz
+	sha256sum -c bin/gcc-2.7.2-psx.tar.gz.sha256
+	cd bin && tar -xf gcc-2.7.2-psx.tar.gz
+	rm bin/gcc-2.7.2-psx.tar.gz
+	rm bin/cc1plus bin/cpp bin/g++ bin/gcc
+	mv bin/cc1 $@
+tools/maspsx/maspsx.py:
+	git submodule update tools/maspsx

@@ -1,0 +1,13 @@
+.idea/
+.vscode/
+build/
+cmake-build-*/
+*.i64
+*.dep
+*.elf
+*.map
+*.o
+*.ps-exe
+
+psyq2elf/psyq2elf
+psyq2elf/psyqdump
