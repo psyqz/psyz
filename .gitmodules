@@ -1,0 +1,6 @@
+[submodule "nugget"]
+	path = nugget
+	url = git@github.com:pcsx-redux/nugget.git
+[submodule "psyq2elf"]
+	path = psyq2elf
+	url = https://gitlab.com/jype/psyq2elf.git

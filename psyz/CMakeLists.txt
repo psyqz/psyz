@@ -1,0 +1,31 @@
+cmake_minimum_required(VERSION 3.10)
+
+project(psyz)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+find_package(SDL2 REQUIRED)
+
+add_library(psyz STATIC
+    src/platform/log.c
+    src/platform/common.c
+    src/platform/sdl2.c
+    src/platform/plat_unix.c
+    src/psyz/libapi.c
+    src/psyz/libetc.c
+    src/psyz/libgpu.c
+    src/psyz/libgpu/ext.c
+    src/psyz/libgpu/font.c
+    src/psyz/libgte.c
+    src/psyz/libgs.c
+    src/psyz/libcd.c
+    src/psyz/libcard.c
+    src/psyz/libspu.c
+    src/psyz/libsnd.c
+    src/psyz/libsn.c
+    src/psyz/libpress.c
+)
+target_compile_definitions(psyz PUBLIC __psyz)
+target_include_directories(psyz PUBLIC include)
+target_link_libraries(psyz PUBLIC SDL2::SDL2 -lGL)

@@ -1,0 +1,4 @@
+psyq*/
+*.zip
+!.keep
+!.gitignore
