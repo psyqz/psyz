@@ -7,6 +7,10 @@
 #else
 #include <SDL2/SDL.h>
 #endif
+#include <libetc.h>
+#include <libgte.h>
+#include <libgpu.h>
+#include "../draw.h"
 #include <SDL2/SDL_opengl.h>
 #include <GLES3/gl3.h>
 
@@ -101,7 +105,7 @@ static SDL_GLContext glContext = NULL;
 static GLuint shader_program = 0;
 static Uint32 elapsed_from_beginning = 0;
 static Uint32 last_vsync = 0;
-static ushort cur_tpage = 0;
+static u_short cur_tpage = 0;
 static GLint uniform_resolution = 0;
 static GLint uniform_tex_4bpp = 0;
 static GLint uniform_tex_8bpp = 0;
@@ -289,8 +293,6 @@ void ResetPlatform(void) {
     SDL_Quit();
 }
 
-int MyResetGraph(int arg0) { return 0; }
-
 int PlatformVSync(int mode) {
     Uint32 cur;
     unsigned short ret;
@@ -329,22 +331,22 @@ void MySsInitHot(void) {
 void MyPadInit(int mode) { INFOF("use keyboard"); }
 
 static u_long keyb_p1[] = {
-    SDL_SCANCODE_W, // PAD_L2
-    SDL_SCANCODE_E, // PAD_R2
-    SDL_SCANCODE_Q, // PAD_L1
-    SDL_SCANCODE_R, // PAD_R1
-    SDL_SCANCODE_S, // PAD_TRIANGLE
-    SDL_SCANCODE_D, // PAD_CIRCLE
-    SDL_SCANCODE_X, // PAD_CROSS
-    SDL_SCANCODE_Z, // PAD_SQUARE
+    SDL_SCANCODE_W,         // PAD_L2
+    SDL_SCANCODE_E,         // PAD_R2
+    SDL_SCANCODE_Q,         // PAD_L1
+    SDL_SCANCODE_R,         // PAD_R1
+    SDL_SCANCODE_S,         // PAD_TRIANGLE
+    SDL_SCANCODE_D,         // PAD_CIRCLE
+    SDL_SCANCODE_X,         // PAD_CROSS
+    SDL_SCANCODE_Z,         // PAD_SQUARE
     SDL_SCANCODE_BACKSPACE, // PAD_SELECT
-    SDL_SCANCODE_1, // PAD_L3
-    SDL_SCANCODE_2, // PAD_R3
-    SDL_SCANCODE_RETURN, // PAD_START
-    SDL_SCANCODE_UP, // PAD_UP
-    SDL_SCANCODE_RIGHT, // PAD_RIGHT
-    SDL_SCANCODE_DOWN, // PAD_DOWN
-    SDL_SCANCODE_LEFT, // PAD_LEFT
+    SDL_SCANCODE_1,         // PAD_L3
+    SDL_SCANCODE_2,         // PAD_R3
+    SDL_SCANCODE_RETURN,    // PAD_START
+    SDL_SCANCODE_UP,        // PAD_UP
+    SDL_SCANCODE_RIGHT,     // PAD_RIGHT
+    SDL_SCANCODE_DOWN,      // PAD_DOWN
+    SDL_SCANCODE_LEFT,      // PAD_LEFT
 };
 u_long MyPadRead(int id) {
     const u8* keyb = SDL_GetKeyboardState(NULL);
@@ -360,11 +362,9 @@ u_long MyPadRead(int id) {
     return pressed;
 }
 
-void MyDrawSyncCallback();
-int MyDrawSync(int mode) {
-    SDL_GL_SwapWindow(window);
-
+int Draw_Sync(int mode) {
     SDL_Event event;
+    SDL_GL_SwapWindow(window);
     while (SDL_PollEvent(&event)) {
         switch (event.type) {
         case SDL_QUIT:
@@ -382,34 +382,24 @@ int MyDrawSync(int mode) {
 int wnd_width = -1;
 int wnd_height = -1;
 RECT g_SetDisp = {0};
-DISPENV* MyPutDispEnv(DISPENV* env) {
+RECT g_PrevDisp = {0};
+void Draw_PutDispEnv(DISPENV* disp) {
     if (!window) {
         InitPlatform();
     }
-    g_SetDisp = env->disp;
-
-    int w = env->disp.w * SCREEN_SCALE;
-    int h = env->disp.h * SCREEN_SCALE;
+    g_PrevDisp = g_SetDisp;
+    g_SetDisp = disp->disp;
+    int w = disp->disp.w * SCREEN_SCALE;
+    int h = disp->disp.h * SCREEN_SCALE;
     if (wnd_width == w && wnd_height == h) {
-        return env;
+        return;
     }
     glViewport(0, 0, w, h);
-    glUniform2f(uniform_resolution, (float)env->disp.w, (float)env->disp.h);
+    glUniform2f(uniform_resolution, (float)disp->disp.w, (float)disp->disp.h);
 
     wnd_width = w;
     wnd_height = h;
     SDL_SetWindowSize(window, w, h);
-    return env;
-}
-
-OT_TYPE* MyClearOTag(OT_TYPE* ot, int n) {
-    while (--n) {
-        setlen(ot, 0);
-        setaddr(ot, ot + 1);
-        ot++;
-    }
-    termPrim(ot);
-    return ot;
 }
 
 #define MAX_VERTEX_COUNT 600
@@ -449,37 +439,7 @@ static void Draw_InitBuffer() {
     glBindVertexArray(0);
 }
 
-static inline void Draw_ResetBuffer() {
-    n_vertices = 0;
-    n_indices = 0;
-    vertex_cur = vertex_buf;
-    index_cur = index_buf;
-}
-static void Draw_FlushBuffer() {
-    if (n_vertices == 0) {
-        return; // buffer is empty, do nothing
-    }
-    if (VBO == -1) {
-        Draw_InitBuffer();
-    }
-
-    if (is_vram_texture_invalid) {
-        UploadTextures();
-        is_vram_texture_invalid = false;
-    }
-
-    glUseProgram(shader_program);
-    glBindVertexArray(VAO);
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glBufferSubData(
-        GL_ARRAY_BUFFER, 0, sizeof(Vertex) * n_vertices, vertex_buf);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-    glBufferSubData(
-        GL_ELEMENT_ARRAY_BUFFER, 0, sizeof(*index_buf) * n_indices, index_buf);
-    glBindVertexArray(VAO);
-    glDrawElements(GL_TRIANGLES, n_indices, GL_UNSIGNED_SHORT, 0);
-    Draw_ResetBuffer();
-}
+void Draw_FlushBuffer(void);
 static inline void Draw_EnsureBufferWillNotOverflow(int vertices, int indices) {
     bool bufferFull = n_vertices + vertices > MAX_VERTEX_COUNT ||
                       n_indices + indices > MAX_INDEX_COUNT;
@@ -508,24 +468,12 @@ static inline void Draw_EnqueueBuffer(int vertices, int indices) {
     n_indices += indices;
 }
 
-DRAWENV* MyPutDrawEnv(DRAWENV* env) {
-    if (env->isbg) {
-        glClearColor((float)env->r0 / 255.f, (float)env->g0 / 255.f,
-                     (float)env->b0 / 255.f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
-    }
-    cur_tpage = env->tpage;
-    DrawSync(0);
-
-    return env;
-}
-
 #define TEXTURED 0x04
 #define EXTRA_VERTEX 0x08
 #define GOURAUD 0x10
 #define TRIANGLE 0x20
 
-static int writePacket(Vertex* v, int code, int n, u32* packet, u16* pOut) {
+static int writePacket(Vertex* v, int code, int n, u_long* packet, u16* pOut) {
     int w;
     if (!n) {
         return 0;
@@ -562,191 +510,197 @@ static int writePacket(Vertex* v, int code, int n, u32* packet, u16* pOut) {
     return w;
 }
 
-#define is_end(p) ((!(p)) || (((u_long)(p) & 0xffffff) == 0xffffff))
-void MyDrawOTag(OT_TYPE* p) {
-    DR_MODE* drMode;
-    bool dfe = false;
-    bool dtd = false;
+int Draw_PushPrim(u_long* packets, int max_len) {
+    int len = max_len;
+    int code = (int)(*packets >> 24) & 0xFF;
+    bool isPoly = !(code & 0x40);
+    bool isLine = (code & 0x40) && !(code & 0x20);
+    bool isTile = (code & 0x40) && (code & 0x20);
+    ushort tpage = -1, clut = -1, pad2, pad3;
+    Vertex* v = vertex_cur;
 
-    Draw_ResetBuffer();
-    for (size_t n = 0; !is_end(p); n++, p = (OT_TYPE*)p->tag) {
-        P_TAG* tag = (P_TAG*)p;
-        if (tag->len == 0) {
-            continue;
-        }
-        if (tag->len == (u_long)-1) {
-            continue;
-        }
-        if (tag->code == 0xFF) {
-            continue;
-        }
-        if (tag->code == 0) {
-            continue;
-        }
+    // to ensure we always have space, we pretend we want to allocate a quad
+    Draw_EnsureBufferWillNotOverflow(4, 6);
+    v->r = *packets >> 0;
+    v->g = *packets >> 8;
+    v->b = *packets >> 16;
+    v->a = 0xFF;
+    packets++;
+    len--;
+    if (isPoly) {
+        if (code & TRIANGLE) {
+            int wr, nVertices, nIndices;
+            wr = writePacket(v++, code, len, packets, &clut);
+            packets += wr;
+            len -= wr;
+            wr = writePacket(v++, code, len, packets, &tpage);
+            packets += wr;
+            len -= wr;
+            wr = writePacket(v++, code, len, packets, &pad2);
+            packets += wr;
+            len -= wr;
 
-        // to be sure, we pretend we want to draw a quad
-        Draw_EnsureBufferWillNotOverflow(4, 6);
-
-        int code = tag->code & ~3;
-        bool isPoly = !(tag->code & 0x40);
-        bool isLine = (tag->code & 0x40) && !(tag->code & 0x20);
-        bool isTile = (tag->code & 0x40) && (tag->code & 0x20);
-        ushort tpage = -1, clut = -1, pad2, pad3;
-        u32* packets = (u32*)((u8*)tag + sizeof(OT_TYPE) + 4);
-        int len = (int)tag->len;
-
-        Vertex* v = vertex_cur;
-        v->r = tag->r0;
-        v->g = tag->g0;
-        v->b = tag->b0;
-        v->a = 0xFF;
-
-        if (code & 0x80) {
-            switch (code) {
-            case 0xE0:
-            case 0xE1:
-                drMode = (DR_MODE*)tag;
-                cur_tpage = (short)(drMode->code[0] & 0x1FF);
-                dtd = (drMode->code[0] & 0x200) != 0;
-                dfe = (drMode->code[0] & 0x400) != 0;
-                break;
-            }
-        } else if (isPoly) {
-            if (code & TRIANGLE) {
-                int wr, nVertices, nIndices;
-                wr = writePacket(v++, code, len, packets, &clut);
-                len -= wr;
-                packets += wr;
-                wr = writePacket(v++, code, len, packets, &tpage);
-                len -= wr;
-                packets += wr;
-                wr = writePacket(v++, code, len, packets, &pad2);
-                len -= wr;
-                packets += wr;
-
-                index_cur[0] = n_vertices + 0;
-                index_cur[1] = n_vertices + 1;
-                index_cur[2] = n_vertices + 2;
-                if (code & EXTRA_VERTEX) {
-                    index_cur[3] = n_vertices + 1;
-                    index_cur[4] = n_vertices + 3;
-                    index_cur[5] = n_vertices + 2;
-                    nVertices = 4;
-                    nIndices = 6;
-                    writePacket(v, code, len, packets, &pad3);
-                } else {
-                    nVertices = 3;
-                    nIndices = 3;
-                }
-                if (!(code & TEXTURED)) {
-                    clut = -1;
-                    tpage = -1;
-                }
-                if (!(code & GOURAUD)) {
-                    VRGBA(vertex_cur[1]) = VRGBA(vertex_cur[2]) =
-                        VRGBA(vertex_cur[3]) = VRGBA(vertex_cur[0]);
-                }
-                SET_TC_ALL(vertex_cur, tpage, clut);
-                Draw_EnqueueBuffer(nVertices, nIndices);
-                continue;
-            } else {
-                // shouldn't never happen on a normal PSX application
-                WARNF("code %02X not supported", tag->code);
-            }
-        } else if (isLine) {
-            SDL_Point points[4];
-            int nPoints = ((code >> 2) & 3) + 1;
-            for (int i = 0; len > 0 && i < nPoints; i++) {
-                points[i].x = ((s16*)packets)[0];
-                points[i].y = ((s16*)packets++)[1];
-                len--;
-                if (len > 0 && code & GOURAUD) {
-                    // TODO not supported on SDL2+OpenGL
-                    packets++;
-                    len--;
-                }
-            }
-            // TODO not sure how to do this with OpenGL
-            // SDL_SetRenderDrawColor(
-            //     renderer, v->r, v->g, v->b, v->a);
-            // SDL_RenderDrawLines(renderer, points, nPoints);
-        } else if (isTile) {
-            int x, y, w, h, tu, tv;
-            x = ((s16*)packets)[0];
-            y = ((s16*)packets)[1];
-            packets++;
-            if (code & TEXTURED) {
-                tu = ((u8*)packets)[0];
-                tv = ((u8*)packets)[1];
-                clut = ((s16*)packets)[1];
-                tpage = cur_tpage;
-                packets++;
-            } else {
-                clut = -1;
-                tpage = -1;
-            }
-            switch (code) {
-            case 0x60: // TILE
-            case 0x64: // SPRT
-                w = ((s16*)packets)[0];
-                h = ((s16*)packets)[1];
-                break;
-            case 0x68: // TILE_1
-            case 0x6C:
-                w = 1;
-                h = 1;
-                break;
-            case 0x70: // TILE_8
-            case 0x74: // SPRT_8
-                w = 8;
-                h = 8;
-                break;
-            case 0x78: // TILE_16
-            case 0x7C: // SPRT_16
-                w = 16;
-                h = 16;
-                break;
-            }
-            vertex_cur[0].x = (short)(x);
-            vertex_cur[0].y = (short)(y);
-            vertex_cur[1].x = (short)(x + w);
-            vertex_cur[1].y = (short)(y);
-            vertex_cur[2].x = (short)(x);
-            vertex_cur[2].y = (short)(y + h);
-            vertex_cur[3].x = (short)(x + w);
-            vertex_cur[3].y = (short)(y + h);
-            if (code & TEXTURED) {
-                vertex_cur[0].u = tu;
-                vertex_cur[0].v = tv;
-                vertex_cur[1].u = tu + w;
-                vertex_cur[1].v = tv;
-                vertex_cur[2].u = tu;
-                vertex_cur[2].v = tv + h;
-                vertex_cur[3].u = tu + w;
-                vertex_cur[3].v = tv + h;
-            }
-            VRGBA(vertex_cur[1]) = VRGBA(vertex_cur[2]) = VRGBA(vertex_cur[3]) =
-                VRGBA(vertex_cur[0]);
             index_cur[0] = n_vertices + 0;
             index_cur[1] = n_vertices + 1;
             index_cur[2] = n_vertices + 2;
-            index_cur[3] = n_vertices + 1;
-            index_cur[4] = n_vertices + 3;
-            index_cur[5] = n_vertices + 2;
+            if (code & EXTRA_VERTEX) {
+                index_cur[3] = n_vertices + 1;
+                index_cur[4] = n_vertices + 3;
+                index_cur[5] = n_vertices + 2;
+                nVertices = 4;
+                nIndices = 6;
+                wr = writePacket(v, code, len, packets, &pad3);
+                packets += wr;
+                len -= wr;
+            } else {
+                nVertices = 3;
+                nIndices = 3;
+            }
+            // HACK last rgb are not read by writePacket, so we patch the amount
+            packets--;
+            len++;
+
+            if (!(code & TEXTURED)) {
+                clut = -1;
+                tpage = -1;
+            }
+            if (!(code & GOURAUD)) {
+                VRGBA(vertex_cur[1]) = VRGBA(vertex_cur[2]) =
+                    VRGBA(vertex_cur[3]) = VRGBA(vertex_cur[0]);
+            }
+
             SET_TC_ALL(vertex_cur, tpage, clut);
-            Draw_EnqueueBuffer(4, 6);
+            Draw_EnqueueBuffer(nVertices, nIndices);
+        } else {
+            // shouldn't never happen on a normal PSX application
+            WARNF("code %02X not supported", code);
         }
+    } else if (isLine) {
+        SDL_Point points[4];
+        int nPoints = ((code >> 2) & 3) + 1;
+        for (int i = 0; len > 0 && i < nPoints; i++) {
+            points[i].x = ((s16*)packets)[0];
+            points[i].y = ((s16*)packets)[1];
+            packets++;
+            len--;
+            if (len > 0 && code & GOURAUD) {
+                // TODO not supported on SDL2+OpenGL
+                packets++;
+                len--;
+            }
+            // HACK last rgb are not read by writePacket, so we patch the amount
+            packets--;
+            len++;
+        }
+        // TODO not sure how to do this with OpenGL
+        // SDL_SetRenderDrawColor(
+        //     renderer, v->r, v->g, v->b, v->a);
+        // SDL_RenderDrawLines(renderer, points, nPoints);
+    } else if (isTile) {
+        int x, y, w, h, tu, tv;
+        x = ((s16*)packets)[0];
+        y = ((s16*)packets)[1];
+        packets++;
+        len--;
+        if (code & TEXTURED) {
+            tu = ((u8*)packets)[0];
+            tv = ((u8*)packets)[1];
+            clut = ((s16*)packets)[1];
+            tpage = cur_tpage;
+            packets++;
+            len--;
+        } else {
+            clut = -1;
+            tpage = -1;
+        }
+        switch (code) {
+        case 0x60: // TILE
+        case 0x64: // SPRT
+            w = ((s16*)packets)[0];
+            h = ((s16*)packets)[1];
+            packets++;
+            len--;
+            break;
+        case 0x68: // TILE_1
+        case 0x6C:
+            w = 1;
+            h = 1;
+            break;
+        case 0x70: // TILE_8
+        case 0x74: // SPRT_8
+            w = 8;
+            h = 8;
+            break;
+        case 0x78: // TILE_16
+        case 0x7C: // SPRT_16
+            w = 16;
+            h = 16;
+            break;
+        }
+        vertex_cur[0].x = (short)(x);
+        vertex_cur[0].y = (short)(y);
+        vertex_cur[1].x = (short)(x + w);
+        vertex_cur[1].y = (short)(y);
+        vertex_cur[2].x = (short)(x);
+        vertex_cur[2].y = (short)(y + h);
+        vertex_cur[3].x = (short)(x + w);
+        vertex_cur[3].y = (short)(y + h);
+        if (code & TEXTURED) {
+            vertex_cur[0].u = tu;
+            vertex_cur[0].v = tv;
+            vertex_cur[1].u = tu + w;
+            vertex_cur[1].v = tv;
+            vertex_cur[2].u = tu;
+            vertex_cur[2].v = tv + h;
+            vertex_cur[3].u = tu + w;
+            vertex_cur[3].v = tv + h;
+        }
+        VRGBA(vertex_cur[1]) = VRGBA(vertex_cur[2]) = VRGBA(vertex_cur[3]) =
+            VRGBA(vertex_cur[0]);
+        index_cur[0] = n_vertices + 0;
+        index_cur[1] = n_vertices + 1;
+        index_cur[2] = n_vertices + 2;
+        index_cur[3] = n_vertices + 1;
+        index_cur[4] = n_vertices + 3;
+        index_cur[5] = n_vertices + 2;
+        SET_TC_ALL(vertex_cur, tpage, clut);
+        Draw_EnqueueBuffer(4, 6);
     }
-    Draw_FlushBuffer();
+    return max_len - len;
 }
 
-int MyClearImage(RECT* rect, u_char r, u_char g, u_char b) {
-    if (rect->x == g_SetDisp.x && rect->y == g_SetDisp.y &&
-        rect->w == g_SetDisp.w && rect->h == g_SetDisp.h) {
+void Draw_SetTexpageMode(ParamDrawTexpageMode* p) {
+    // implements SetDrawMode, SetDrawEnv
+    cur_tpage = *(u_short*)p & 0x1F; // TODO
+    NOT_IMPLEMENTED;
+}
+void Draw_SetTextureWindow(int mask_x, int mask_y, int off_x, int off_y) {
+    // implements SetTexWindow
+    // it seems it is some kind of texture clamp/repeat
+    NOT_IMPLEMENTED;
+}
+void Draw_SetAreaSXSY(int x, int y) {
+    // implements SetDrawArea, SetDrawEnv
+    NOT_IMPLEMENTED;
+}
+void Draw_SetAreaEXEY(int x, int y) {
+    // implements ??
+    NOT_IMPLEMENTED;
+}
+void Draw_ClearImage(RECT* rect, u_char r, u_char g, u_char b) {
+    // TODO HACK comparing both g_SetDisp and g_PrevDisp because in one of the
+    // samples PutDrawEnv is called after PutDispEnv, clearing the buffer that
+    // is currently in the background instead of the front one
+    if ((rect->x == g_SetDisp.x && rect->y == g_SetDisp.y &&
+        rect->w == g_SetDisp.w && rect->h == g_SetDisp.h) ||
+        rect->x == g_PrevDisp.x && rect->y == g_PrevDisp.y &&
+            rect->w == g_PrevDisp.w && rect->h == g_PrevDisp.h) {
         glClearColor(
             (float)r / 255.f, (float)g / 255.f, (float)b / 255.f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
-        return 0;
+        return;
+    } else {
+        WARNF("TODO implement partial clear screen");
     }
 
     u16* vram = g_RawVram;
@@ -758,10 +712,8 @@ int MyClearImage(RECT* rect, u_char r, u_char g, u_char b) {
         }
         vram += VRAM_W;
     }
-    return 0;
 }
-
-int MyLoadImage(RECT* rect, u_long* p) {
+void Draw_LoadImage(RECT* rect, u_long* p) {
     ushort* mem = (ushort*)p;
     ushort* vram = g_RawVram;
     vram += rect->x + rect->y * VRAM_W;
@@ -772,10 +724,8 @@ int MyLoadImage(RECT* rect, u_long* p) {
         vram += VRAM_W;
     }
     is_vram_texture_invalid = true;
-    return 0;
 }
-
-int MyStoreImage(RECT* rect, u_long* p) {
+void Draw_StoreImage(RECT* rect, u_long* p) {
     u16* mem = (u16*)p;
     u16* vram = g_RawVram;
     vram += rect->x + rect->y * VRAM_W;
@@ -786,5 +736,33 @@ int MyStoreImage(RECT* rect, u_long* p) {
         }
         vram += VRAM_W;
     }
-    return 0;
+}
+void Draw_ResetBuffer(void) {
+    n_vertices = 0;
+    n_indices = 0;
+    vertex_cur = vertex_buf;
+    index_cur = index_buf;
+}
+void Draw_FlushBuffer(void) {
+    if (n_vertices == 0) {
+        return;
+    }
+    if (VBO == -1) {
+        Draw_InitBuffer();
+    }
+    if (is_vram_texture_invalid) {
+        UploadTextures();
+        is_vram_texture_invalid = false;
+    }
+    glUseProgram(shader_program);
+    glBindVertexArray(VAO);
+    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    glBufferSubData(
+        GL_ARRAY_BUFFER, 0, sizeof(Vertex) * n_vertices, vertex_buf);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+    glBufferSubData(
+        GL_ELEMENT_ARRAY_BUFFER, 0, sizeof(*index_buf) * n_indices, index_buf);
+    glBindVertexArray(VAO);
+    glDrawElements(GL_TRIANGLES, n_indices, GL_UNSIGNED_SHORT, 0);
+    Draw_ResetBuffer();
 }
