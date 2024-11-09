@@ -76,6 +76,7 @@ static const char gl33_fragment_shader[] = {
     "            vec2 clutIdx = getPsxClutXY(clut);"
     "            vec2 palCoord = clutIdx + vec2(palIdx, 0);"
     "            vec4 palColor = texture(tex16, palCoord);"
+    "            palColor.a /= 2;"
     "            FragColor = palColor * vertexColor * 2;\n"
     "        }\n"
     "    }\n"
@@ -468,6 +469,7 @@ static inline void Draw_EnqueueBuffer(int vertices, int indices) {
     n_indices += indices;
 }
 
+#define SEMITRANSP 0x02
 #define TEXTURED 0x04
 #define EXTRA_VERTEX 0x08
 #define GOURAUD 0x10
@@ -504,7 +506,7 @@ static int writePacket(Vertex* v, int code, int n, u_long* packet, u16* pOut) {
         v->r = ((u8*)packet)[0];
         v->g = ((u8*)packet)[1];
         v->b = ((u8*)packet)[2];
-        v->a = 0xFF;
+        v->a = code & SEMITRANSP ? 0x80 : 0xFF;
         w++;
     }
     return w;
@@ -531,7 +533,7 @@ int Draw_PushPrim(u_long* packets, int max_len) {
     } else {
         v->r = v->g = v->b = 0x80;
     }
-    v->a = 0xFF;
+    v->a = code & SEMITRANSP ? 0x80 : 0xFF;
     packets++;
     len--;
     if (isPoly) {
