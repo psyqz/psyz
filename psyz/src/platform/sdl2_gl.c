@@ -516,14 +516,21 @@ int Draw_PushPrim(u_long* packets, int max_len) {
     bool isPoly = !(code & 0x40);
     bool isLine = (code & 0x40) && !(code & 0x20);
     bool isTile = (code & 0x40) && (code & 0x20);
+    bool isTextured = (code & TEXTURED) != 0;
+    bool isGouraud = (code & GOURAUD) != 0;
+    bool isShadeTex = !((code & 1) && isTextured);
     ushort tpage = -1, clut = -1, pad2, pad3;
     Vertex* v = vertex_cur;
 
     // to ensure we always have space, we pretend we want to allocate a quad
     Draw_EnsureBufferWillNotOverflow(4, 6);
-    v->r = *packets >> 0;
-    v->g = *packets >> 8;
-    v->b = *packets >> 16;
+    if (isShadeTex) {
+        v->r = *packets >> 0;
+        v->g = *packets >> 8;
+        v->b = *packets >> 16;
+    } else {
+        v->r = v->g = v->b = 0x80;
+    }
     v->a = 0xFF;
     packets++;
     len--;
@@ -560,11 +567,11 @@ int Draw_PushPrim(u_long* packets, int max_len) {
             packets--;
             len++;
 
-            if (!(code & TEXTURED)) {
+            if (!isTextured) {
                 clut = -1;
                 tpage = -1;
             }
-            if (!(code & GOURAUD)) {
+            if (!isGouraud || !isShadeTex) {
                 VRGBA(vertex_cur[1]) = VRGBA(vertex_cur[2]) =
                     VRGBA(vertex_cur[3]) = VRGBA(vertex_cur[0]);
             }
@@ -583,7 +590,7 @@ int Draw_PushPrim(u_long* packets, int max_len) {
             points[i].y = ((s16*)packets)[1];
             packets++;
             len--;
-            if (len > 0 && code & GOURAUD) {
+            if (len > 0 && isGouraud) {
                 // TODO not supported on SDL2+OpenGL
                 packets++;
                 len--;
@@ -613,7 +620,7 @@ int Draw_PushPrim(u_long* packets, int max_len) {
             clut = -1;
             tpage = -1;
         }
-        switch (code) {
+        switch (code & ~3) {
         case 0x60: // TILE
         case 0x64: // SPRT
             w = ((s16*)packets)[0];

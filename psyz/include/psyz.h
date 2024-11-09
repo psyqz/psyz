@@ -3,6 +3,7 @@
 
 #include <types.h>
 #include <log.h>
+#include <stdlib.h>
 
 #define PAD_COUNT 2
 #define PAD_L2 0x0001
