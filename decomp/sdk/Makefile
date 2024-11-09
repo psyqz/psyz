@@ -4,7 +4,7 @@ psyq400: psyq400.tar.gz
 	mkdir -p $@
 	cd $@ && tar -xf ../$^
 psyq400.tar.gz:
-	wget https://github.com/Xeeynamo/psyz/releases/download/requirements/psyq400.tar.gz
+	wget https://github.com/psyqz/psyz/releases/download/requirements/psyq400.tar.gz
 	sha256sum -c $@.sha256
 	
 psyq470: Psy-Q_47.zip

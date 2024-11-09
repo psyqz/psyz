@@ -23,7 +23,7 @@ bin/psyq-obj-parser: decomp/bin/psyq-obj-parser
 bin/psyqdump: decomp/bin/psyqdump
 	cp $< $@
 decomp/bin/psyq-obj-parser:
-	cd decomp/bin && wget https://github.com/Xeeynamo/psyz/releases/download/requirements/psyq-obj-parser.xz
+	cd decomp/bin && wget https://github.com/psyqz/psyz/releases/download/requirements/psyq-obj-parser.xz
 	cd decomp/bin && sha256sum -c psyq-obj-parser.xz.sha256
 	cd decomp/bin && xz -d psyq-obj-parser.xz
 	chmod +x $@
