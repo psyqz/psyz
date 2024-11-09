@@ -34,7 +34,7 @@ for psyq_lib in "$PSYQ_DIR"/*.LIB; do
 
 	for psyq_obj in "$TMP/psyq"/*.OBJ; do
 		elf_obj="$TMP/elf/$(basename "${psyq_obj%.*}" | tolower).o"
-		../psyq-obj-parser "$psyq_obj" -o "$elf_obj"
+		../psyq-obj-parser "$psyq_obj" -o "$elf_obj" > /dev/null
 	done
 
 	ar rcs "$elf_lib" "$TMP/elf"/*.o

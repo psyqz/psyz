@@ -6,7 +6,7 @@ LD			:= mipsel-linux-gnu-ld
 OBJCOPY		:= mipsel-linux-gnu-objcopy
 ASFLAGS		:= -Iinclude -march=r3000 -mtune=r3000 -no-pad-sections -O1 -G0
 CPPFLAGS	:= -Iinclude -Iinclude/og -Wno-builtin-declaration-mismatch
-CPPFLAGS	+= -Dmips -D__OPTIMIZE__ -D__mips__ -D__mips -Dpsx -D__psx__ -D__psx -D_PSYQ -D__EXTENSIONS__ -D_MIPSEL -D_LANGUAGE_C -DLANGUAGE_C
+CPPFLAGS	+= -Dmips -D__OPTIMIZE__ -D__mips__ -Dpsx -D__psx__ -D__psx -D_PSYQ -D__EXTENSIONS__ -D_MIPSEL -D_LANGUAGE_C -DLANGUAGE_C
 CFLAGS		:= -G0 -w -O2 -g -fno-builtin -funsigned-char -fpeephole -ffunction-cse -fpcc-struct-return -fcommon -fverbose-asm -msoft-float -g
 MASPSX      := python3 tools/maspsx/maspsx.py --expand-div --aspsx-version=2.56
 
@@ -74,23 +74,21 @@ build/psyq$(PSYQ_VER).ld: splat$(PSYQ_VER).yaml psyq$(PSYQ_VER).elf.sha256 symbo
 	rm -rf build/src
 	splat split $<
 psyq$(PSYQ_VER).elf.sha256: psyq$(PSYQ_VER).elf
+	mkdir -p build/
 	mv $< build/
 	sha256sum build/$< > $@
-	mv build/$< ./
+	mv build/$< .
 psyq$(PSYQ_VER).elf: $(patsubst %,obj/$(PSYQ_VER)/%, $(LIBS))
 	./rm-o-dups-$(PSYQ_VER).sh
 	./psyq-gen.sh $(PSYQ_VER)
-	mkdir -p build
-	mv psyq$(PSYQ_VER).elf build/
-	sha256sum build/psyq$(PSYQ_VER).elf > psyq$(PSYQ_VER).elf.sha256
-	mv build/psyq$(PSYQ_VER).elf ./
+	sha256sum -c psyq$(PSYQ_VER).map.sha256
 obj/$(PSYQ_VER)/lib%: sdk/psyq$(PSYQ_VER) bin/psyqdump
 	mkdir -p $@ && \
 		bin/psyqdump $</LIB/LIB$(shell echo $* | tr '[:lower:]' '[:upper:]').LIB $@ || \
 		rm -r $@
 	@for file in $@/*.OBJ; do \
 		output="$$(echo $${file%.OBJ}.o | tr '[:upper:]' '[:lower:]')"; \
-		bin/psyq-obj-parser "$$file" -o "$$output"; \
+		bin/psyq-obj-parser "$$file" -o "$$output" > /dev/null; \
 	done
 include/og/libgpu.h: sdk/psyq$(PSYQ_VER) bin/psyq2elf
 	mkdir -p include/og
