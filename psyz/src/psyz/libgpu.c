@@ -120,12 +120,13 @@ static int GPU_Sync(int mode) {
             Draw_SetTextureWindow(0, 0, 0, 0);
             break;
         case 0xE3:
-            Draw_SetAreaSXSY((int)op & 0x3FF, (int)(op >> 10) & 0x3FF);
+            Draw_SetAreaStart((int)op & 0x3FF, (int)(op >> 10) & 0x3FF);
             break;
         case 0xE4:
-            Draw_SetAreaEXEY((int)op & 0x3FF, (int)(op >> 10) & 0x3FF);
+            Draw_SetAreaEnd((int)op & 0x3FF, (int)(op >> 10) & 0x3FF);
             break;
-        case 0xF7:
+        case 0xE5:
+            Draw_SetOffset((int)op & 0x7FF, (int)(op >> 11) & 0x7FF);
             break;
         default:
             if (code >= 0x20 && code < 0x80) {
@@ -183,24 +184,17 @@ static u_long psyz_status(void) {
 #define CLAMP(value, low, high)                                                \
     value < low ? low : (value > high ? high : value)
 u_long get_cs(short x, short y) {
-    int var_v0;
-    int var_v1;
-
     x = CLAMP(x, 0, 1023);
     y = CLAMP(y, 0, 511);
-    var_v1 = (y & 0x3FF) << 10;
-    var_v0 = x & 0x3FF;
-    return 0xE3000000 | var_v1 | var_v0;
+    return 0xE3000000 | ((y & 0x3FF) << 10) | (x & 0x3FF);
 }
-
-u_long get_ce(int w, int h) {
-    NOT_IMPLEMENTED;
-    return 0;
+u_long get_ce(short x, short y) {
+    x = CLAMP(x, 0, 1023);
+    y = CLAMP(y, 0, 511);
+    return 0xE4000000 | ((y & 0x3FF) << 10) | (x & 0x3FF);
 }
-
-u_long get_ofs(int w, int h) {
-    NOT_IMPLEMENTED;
-    return 0;
+u_long get_ofs(short x, short y) {
+    return 0xE5000000 | ((y & 0x7FF) << 11) | (x & 0x7FF);
 }
 
 void GPU_cw(u_long* param) {

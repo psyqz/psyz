@@ -679,12 +679,16 @@ void Draw_SetTextureWindow(int mask_x, int mask_y, int off_x, int off_y) {
     // it seems it is some kind of texture clamp/repeat
     NOT_IMPLEMENTED;
 }
-void Draw_SetAreaSXSY(int x, int y) {
+void Draw_SetAreaStart(int x, int y) {
     // implements SetDrawArea, SetDrawEnv
     NOT_IMPLEMENTED;
 }
-void Draw_SetAreaEXEY(int x, int y) {
+void Draw_SetAreaEnd(int x, int y) {
     // implements ??
+    NOT_IMPLEMENTED;
+}
+void Draw_SetOffset(int x, int y) {
+    // implements SetDrawEnv, SetDrawOffset
     NOT_IMPLEMENTED;
 }
 void Draw_ClearImage(RECT* rect, u_char r, u_char g, u_char b) {
@@ -692,7 +696,7 @@ void Draw_ClearImage(RECT* rect, u_char r, u_char g, u_char b) {
     // samples PutDrawEnv is called after PutDispEnv, clearing the buffer that
     // is currently in the background instead of the front one
     if ((rect->x == g_SetDisp.x && rect->y == g_SetDisp.y &&
-        rect->w == g_SetDisp.w && rect->h == g_SetDisp.h) ||
+         rect->w == g_SetDisp.w && rect->h == g_SetDisp.h) ||
         rect->x == g_PrevDisp.x && rect->y == g_PrevDisp.y &&
             rect->w == g_PrevDisp.w && rect->h == g_PrevDisp.h) {
         glClearColor(

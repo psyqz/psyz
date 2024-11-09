@@ -22,8 +22,9 @@ typedef struct {
 } ParamDrawTexpageMode;
 void Draw_SetTexpageMode(ParamDrawTexpageMode* p);
 void Draw_SetTextureWindow(int mask_x, int mask_y, int off_x, int off_y);
-void Draw_SetAreaSXSY(int x, int y);
-void Draw_SetAreaEXEY(int x, int y);
+void Draw_SetAreaStart(int x, int y);
+void Draw_SetAreaEnd(int x, int y);
+void Draw_SetOffset(int x, int y);
 void Draw_ClearImage(RECT* rect, u_char r, u_char g, u_char b);
 void Draw_LoadImage(RECT* rect, u_long* p);
 void Draw_StoreImage(RECT* rect, u_long* p);
