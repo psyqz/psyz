@@ -16,6 +16,8 @@ This decomp is a spin-off of [sotn-decomp psxsdk](https://github.com/Xeeynamo/so
 
 To cross-compile your application between PSY-Q and PSY-Z, there is an important step to follow. The PSY-Q SDK uses something called _ordered table_, often abbreviated as `ot`. The type of this variable is `u_long*`. Due to how PSY-Q handles memory, the ordered table will not work on other platforms without modification. You need to replace `u_long*` with `OT_TYPE*` and include the header `psyz.h`, along with the modified `lib*.h` headers in your software.
 
+If your software uses `u_long` to store 32-bit values you will need to change the type as `usigned int`, otherwise data will not be stored as expected on 64-bit builds. This is true for many samples from the PSX SDK.
+
 In rare cases where certain applications or games recreate or reuse GPU primitives defined in `libgpu.h`, be sure to replace the struct field at the beginning of your custom structs from `u_long*` tag to `O_TAG`. You can refer to struct `POLY_F3` or similar for examples of how the original structures were adjusted.
 
 To include the necessary headers, add `-Ipsyz/include`to your GCC or Clang compiler flags. You can look into the `samples/` directory for examples on how to set up a project to target both PlayStation 1 hardware and PSY-Z on PC.
