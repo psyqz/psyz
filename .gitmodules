@@ -4,3 +4,6 @@
 [submodule "decomp/tools/maspsx"]
 	path = decomp/tools/maspsx
 	url = git@github.com:mkst/maspsx.git
+[submodule "decomp/tools/asm-differ"]
+	path = decomp/tools/asm-differ
+	url = git@github.com:simonlindholm/asm-differ.git
