@@ -35,8 +35,6 @@ struct Gpu {
     /* 0x3C */ int (*sync)(int mode);
 };
 
-DISPENV* PutDispEnv(DISPENV* env) { Draw_PutDispEnv(env); }
-
 static int queue_len = 0;
 static u_long queue_buf[0x4000];
 int GPU_Enqueue(u_long p1, u_long p2) {
@@ -142,6 +140,12 @@ static int GPU_Sync(int mode) {
     return queue_len;
 }
 
+DISPENV* PutDispEnv(DISPENV* env) {
+    Draw_PutDispEnv(env);
+    GPU_Sync(0);
+    return env;
+}
+
 static int psyz_addque2(
     int (*exec)(u_long p1, u_long p2), u_long p1, int len, u_long p2) {
     return exec(p1, p2);
@@ -180,6 +184,10 @@ static u_long psyz_status(void) {
     NOT_IMPLEMENTED;
     return 0;
 }
+static int psyz_sync(int) {
+    NOT_IMPLEMENTED;
+    return 0;
+}
 
 #define CLAMP(value, low, high)                                                \
     value < low ? low : (value > high ? high : value)
@@ -214,7 +222,7 @@ void GPU_cw(u_long* param) {
     gpu->param = psyz_param;
     gpu->reset = psyz_reset;
     gpu->status = psyz_status;
-    gpu->sync = GPU_Sync;
+    gpu->sync = psyz_sync;
 }
 
 // these are not yet decompiled
@@ -227,4 +235,4 @@ int _dws() { return 0; }
 int _exeque() { return 0; }
 void _otc(OT_TYPE* ot, s32 n) {}
 int _reset(int mode) { return RETAIL_CONSOLE_TYPE; }
-void _sync(int) {}
+int _sync(int) {}

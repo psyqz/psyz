@@ -397,15 +397,13 @@ void Draw_PutDispEnv(DISPENV* disp) {
     g_SetDisp = disp->disp;
     int w = disp->disp.w * SCREEN_SCALE;
     int h = disp->disp.h * SCREEN_SCALE;
-    if (wnd_width == w && wnd_height == h) {
-        return;
+    if (wnd_width != w || wnd_height != h) {
+        glViewport(0, 0, w, h);
+        glUniform2f(uniform_resolution, (float)disp->disp.w, (float)disp->disp.h);
+        wnd_width = w;
+        wnd_height = h;
+        SDL_SetWindowSize(window, w, h);
     }
-    glViewport(0, 0, w, h);
-    glUniform2f(uniform_resolution, (float)disp->disp.w, (float)disp->disp.h);
-
-    wnd_width = w;
-    wnd_height = h;
-    SDL_SetWindowSize(window, w, h);
 }
 
 #define MAX_VERTEX_COUNT 1024
