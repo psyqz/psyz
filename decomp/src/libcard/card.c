@@ -1,4 +1,8 @@
 #include <common.h>
+#include <kernel.h>
 #include <libcard.h>
 
-INCLUDE_ASM("asm/nonmatchings/libcard/card", _card_clear);
+long _card_clear(long chan) {
+    _new_card();
+    return _card_write(chan, 0x3F, 0);
+}

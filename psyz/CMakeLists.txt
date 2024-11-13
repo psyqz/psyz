@@ -15,6 +15,8 @@ add_library(psyz STATIC
     src/psyz/libapi.c
     src/psyz/libetc.c
     src/psyz/libgpu.c
+    ../decomp/src/libcard/card.c
+    ../decomp/src/libcard/init.c
     ../decomp/src/libgpu/sys.c
     ../decomp/src/libgpu/ext.c
     ../decomp/src/libgpu/font.c

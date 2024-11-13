@@ -7,24 +7,124 @@ int VSync(int mode) { return MyVSync(mode); }
 
 long SetRCnt(unsigned long a, unsigned short b, long c) { NOT_IMPLEMENTED; }
 
+long ReadInitPadFlag(void) {
+    NOT_IMPLEMENTED;
+    return 0;
+}
+
 void ChangeClearPAD(long a) { NOT_IMPLEMENTED; }
 
-void _bu_init(void) { NOT_IMPLEMENTED; }
-
-long OpenEvent(unsigned long a, long b, long c, long (*func)()) {
-    NOT_IMPLEMENTED;
+static unsigned long event_first_empty = 0;
+static struct EvCB events[0x100] = {0};
+static long GetFirstFreeEvent() {
+    // event_first_empty brings the function to O(1) in an optimistic scenario,
+    // but it does not guarantee it always points to an empty event
+    for (unsigned long i = event_first_empty; i < LEN(events); i++) {
+        if (!events[i].desc) {
+            return (long)i;
+        }
+    }
     return -1;
 }
-
-long EnableEvent(long a) {
-    NOT_IMPLEMENTED;
-    return -1;
+long OpenEvent(unsigned long desc, long spec, long mode, long (*func)()) {
+    if (!desc) {
+        WARNF("invalid desc %08X", desc);
+        return -1;
+    }
+    long id = GetFirstFreeEvent();
+    if (id < 0) {
+        WARNF("run out of memory");
+        return -1;
+    }
+    struct EvCB* e = &events[id];
+    e->desc = desc;
+    e->spec = spec;
+    e->mode = mode;
+    e->FHandler = func;
+    e->system[0] = 0;
+    e->system[1] = 0;
+    bool supported = true;
+    switch (desc) {
+    case SwCARD:
+        switch (spec) {
+        case EvSpIOE: // always report memory card as connected
+            e->status = 1;
+            break;
+        case EvSpERROR: // never errors
+        case EvSpTIMOUT: // never report memory card as disconnected
+        case EvSpNEW: // never block writing after connection
+            e->status = 0;
+            break;
+        default:
+            supported = false;
+            break;
+        }
+        break;
+    case HwCARD:
+        switch (spec) {
+        case EvSpIOE: // always report end of IO
+            e->status = 1;
+            break;
+        case EvSpERROR: // never errors
+        case EvSpTIMOUT: // never timeout
+        case EvSpNEW: // never report a new memory card
+            e->status = 0;
+            break;
+        default:
+            supported = false;
+            break;
+        }
+        break;
+    default:
+        supported = false;
+        break;
+    }
+    if (!supported) {
+        e->status = 0;
+        WARNF("unsupported spec:%08X, desc:%04X, mode:%04X", spec, desc, mode);
+    }
+    event_first_empty = id + 1;
+    return id;
 }
-
-long TestEvent(unsigned long event) {
-    // until OpenEvent is implemented, this will remain hardcoded to
-    // always return 1.
+long CloseEvent(unsigned long event) {
+    if (event >= LEN(events)) {
+        WARNF("invalid event ID %d", event);
+        return 0;
+    }
+    events[event].desc = 0;
+    event_first_empty = event;
     return 1;
+}
+long WaitEvent(unsigned long event) {
+    if (event >= LEN(events)) {
+        WARNF("invalid event ID %d", event);
+        return 0;
+    }
+    // never waits
+    return 1;
+}
+long EnableEvent(unsigned long event) {
+    if (event >= LEN(events)) {
+        WARNF("invalid event ID %d", event);
+        return 0;
+    }
+    NOT_IMPLEMENTED;
+    return 1;
+}
+long DisableEvent(unsigned long event) {
+    if (event >= LEN(events)) {
+        WARNF("invalid event ID %d", event);
+        return 0;
+    }
+    NOT_IMPLEMENTED;
+    return 1;
+}
+long TestEvent(unsigned long event) {
+    if (event >= LEN(events)) {
+        WARNF("invalid event ID %d", event);
+        return 0;
+    }
+    return events[event].status;
 }
 
 void EnterCriticalSection(void) { NOT_IMPLEMENTED; }
@@ -44,4 +144,7 @@ struct DIRENTRY* nextfile(struct DIRENTRY* outEntry) {
 long my_erase(char* path);
 long erase(char* path) { return my_erase(path); }
 
-long format(char* fs) { NOT_IMPLEMENTED; }
+long my_format(char* fs);
+long format(char* fs) {
+    return my_format(fs);
+}

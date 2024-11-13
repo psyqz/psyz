@@ -74,6 +74,16 @@
 #define TcbStUNUSED 0x1000
 #define TcbStACTIVE 0x4000
 
+struct EvCB {
+    unsigned long desc;
+    long status;
+    long spec;
+    long mode;
+    long (*FHandler)();
+    long system[2];			/* reserved by system */
+};
+
+typedef struct DIRENTRY_RESERVED * PDIRENTRY_RESERVED;
 struct DIRENTRY {
     /* 0x00 */ char name[20];
     /* 0x14 */ long attr;
@@ -86,10 +96,19 @@ struct DIRENTRY {
 void EnterCriticalSection(void);
 void ExitCriticalSection(void);
 
+void InitCARD(long val);
+long StartCARD(void);
+long StopCARD(void);
+void _bu_init(void);
 long _card_info(long chan);
 long _card_clear(long chan);
 long _card_load(long chan);
-void InitCARD(long val);
-long StartCARD(void);
+long _card_auto(long val);
+void _new_card(void);
+long _card_status(long drv);
+long _card_wait(long drv);
+unsigned long _card_chan(void);
+long _card_write(long chan, long block, unsigned char *buf);
+long _card_read(long chan, long block, unsigned char *buf);
 
 #endif

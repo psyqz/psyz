@@ -3,7 +3,19 @@
 
 #include <types.h>
 #include <log.h>
+#include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+
+#ifdef __psyz
+// stub unix implementations
+#define open my_open
+#define close my_close
+#define lseek my_lseek
+#define read my_read
+#define write my_write
+#define ioctl my_ioctl
+#endif
 
 #define PAD_COUNT 2
 #define PAD_L2 0x0001

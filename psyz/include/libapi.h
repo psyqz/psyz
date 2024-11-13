@@ -15,6 +15,21 @@ struct EXEC {
     unsigned long sp, fp, gp, ret, base;
 };
 
+extern void InitCARD(long val);
+extern long StartCARD(void);
+extern long StopCARD(void);
+extern void _bu_init(void);
+extern long _card_info(long chan);
+extern long _card_clear(long chan);
+extern long _card_load(long chan);
+extern long _card_auto(long val);
+extern void _new_card(void);
+extern long _card_status(long drv);
+extern long _card_wait(long drv);
+extern unsigned long _card_chan(void);
+extern long _card_write(long chan, long block, unsigned char* buf);
+extern long _card_read(long chan, long block, unsigned char* buf);
+
 extern void InitHeap(unsigned long*, unsigned long);
 extern long Load(char*, struct EXEC*);
 extern long Exec(struct EXEC*, long, char**);
@@ -25,9 +40,7 @@ extern void _bu_init(void);
  * Opens a device for low-level input/output and returns
  * the descriptor. Returns -1 on failure.
  */
-extern long open(char* devname, // Pointer to a filename
-                 int flag       // Open mode
-);
+int open(const char* __file, int __oflag, ...);
 
 extern long lseek(long, long, long);
 
@@ -68,16 +81,15 @@ int PAD_init(s32 /*??*/, s32* /*??*/);
 extern void FlushCache(void);
 extern void DeliverEvent(unsigned long, unsigned long);
 
-/*
- * Checks to see whether or not the event specified by the descriptor
- * event has occurred. If so, the function restores the event state to
- * EvStACTIVE.
- * Returns 1 if the event is found to have occurred, 0 otherwise.
- */
-extern long TestEvent(unsigned long event // Event descriptor
-);
 extern long OpenEvent(unsigned long, long, long, long (*func)());
+extern long CloseEvent(long);
+extern long WaitEvent(long);
+extern long TestEvent(long);
 extern long EnableEvent(long);
+extern long DisableEvent(long);
+extern void DeliverEvent(unsigned long, unsigned long);
+extern void UnDeliverEvent(unsigned long, unsigned long);
+
 // ChangeClearRCnt
 extern void _96_remove(void);
 extern long SetRCnt(unsigned long, unsigned short, long);
