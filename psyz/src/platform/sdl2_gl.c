@@ -34,10 +34,14 @@ static const char gl33_vertex_shader[] = {
     // select the right texture coords based on the tpage
     "    clut = uint(tex.z);\n"
     "    tpage = uint(tex.w);\n"
+    "    texCoord = vec2(tex.x / 4096.0, tex.y / 512.0);\n"
+    "    if ((tpage & 0x80u) != 0u) {\n"
+    "        texCoord.x *= 2;"
+    "    }\n"
     "    vec2 page = vec2(\n"
-    "        float(tpage % 16u) / 16.0,\n"
-    "        float(tpage / 16u) / 2.0);\n"
-    "    texCoord = page + vec2(tex.x / 4096.0, tex.y / 512.0);\n"
+    "        float((tpage % 32u) % 16u) / 16.0,\n"
+    "        float((tpage % 32u) / 16u) / 2.0);\n"
+    "    texCoord += page;\n"
     "}\n"};
 
 static const char gl33_fragment_shader[] = {
@@ -59,16 +63,17 @@ static const char gl33_fragment_shader[] = {
     "}\n"
     "\n"
     "void main() {\n"
-    "    if (tpage >= 0x40u) {\n"
-    "        if (tpage >= 0x80u) {\n" // untextured
-    "            FragColor = vertexColor;\n"
-    "        }\n"
-    "        else {\n"                                  // 16-bit
-    "            FragColor = vec4(0.0, 1.0, 0.0, 1.0);" // TODO
-    "        }\n"
+    "    if (tpage == 0xFFFFu) {\n"
+    "        FragColor = vertexColor;\n"
     "    } else {\n"
-    "        if (tpage >= 0x20u) {\n"                   // 8-bit
-    "            FragColor = vec4(0.0, 1.0, 1.0, 1.0);" // TODO
+    "        if (tpage >= 0x80u) {\n"                   // 8-bit
+    "            float colIdx = texture(tex8, texCoord).r;\n"
+    "            float palIdx = floor(colIdx * 256.0) / 1024.0f;\n"
+    "            vec2 clutIdx = getPsxClutXY(clut);"
+    "            vec2 palCoord = clutIdx + vec2(palIdx, 0);"
+    "            vec4 palColor = texture(tex16, palCoord);"
+    "            palColor.a /= 2;"
+    "            FragColor = palColor * vertexColor * 2;\n"
     "        }\n"
     "        else {\n" // 4-bit
     "            float colIdx = texture(tex4, texCoord).r;\n"
@@ -89,7 +94,7 @@ typedef struct {
 } Vertex;
 
 #define VRGBA(p) (*(unsigned int*)(&((p).r)))
-#define SET_TC(p, tpage, clut) (p)->t = (u8)tpage, (p)->c = (u16)clut;
+#define SET_TC(p, tpage, clut) (p)->t = (u16)tpage, (p)->c = (u16)clut;
 #define SET_TC_ALL(p, t, c)                                                    \
     SET_TC(p, t, c) SET_TC(&p[1], t, c) SET_TC(&p[2], t, c) SET_TC(&p[3], t, c)
 
@@ -684,7 +689,7 @@ int Draw_PushPrim(u_long* packets, int max_len) {
 
 void Draw_SetTexpageMode(ParamDrawTexpageMode* p) {
     // implements SetDrawMode, SetDrawEnv
-    cur_tpage = *(u_short*)p & 0x1F; // TODO
+    cur_tpage = *(u_short*)p & 0xFF; // TODO
     NOT_IMPLEMENTED;
 }
 void Draw_SetTextureWindow(int mask_x, int mask_y, int off_x, int off_y) {
