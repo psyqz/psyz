@@ -329,6 +329,21 @@ void MySsInitHot(void) {
     SDL_PauseAudioDevice(audio_device_id, 0);
 }
 
+static void PollEvents(void) {
+    SDL_Event event;
+    while (SDL_PollEvent(&event)) {
+        switch (event.type) {
+        case SDL_QUIT:
+            exit(0);
+        case SDL_KEYDOWN:
+            if (event.key.keysym.scancode == SDL_SCANCODE_ESCAPE) {
+                exit(0);
+            }
+            break;
+        }
+    }
+}
+
 void MyPadInit(int mode) { INFOF("use keyboard"); }
 
 static u_long keyb_p1[] = {
@@ -350,6 +365,7 @@ static u_long keyb_p1[] = {
     SDL_SCANCODE_LEFT,      // PAD_LEFT
 };
 u_long MyPadRead(int id) {
+    PollEvents();
     const u8* keyb = SDL_GetKeyboardState(NULL);
     u_long pressed = 0;
 
@@ -364,19 +380,8 @@ u_long MyPadRead(int id) {
 }
 
 int Draw_Sync(int mode) {
-    SDL_Event event;
+    PollEvents();
     SDL_GL_SwapWindow(window);
-    while (SDL_PollEvent(&event)) {
-        switch (event.type) {
-        case SDL_QUIT:
-            exit(0);
-        case SDL_KEYDOWN:
-            if (event.key.keysym.scancode == SDL_SCANCODE_ESCAPE) {
-                exit(0);
-            }
-            break;
-        }
-    }
     return 0;
 }
 
