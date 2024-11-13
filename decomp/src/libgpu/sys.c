@@ -63,7 +63,9 @@ int _param(int);
 int _reset(int);
 u_long _status(void);
 int _sync(int mode);
+#ifndef __psyz
 int printf();
+#endif
 
 u_long get_cs(short x, short y);
 u_long get_ce(short x, short y);
@@ -90,7 +92,7 @@ static struct Gpu _gpucb = {
     _sync,
 };
 static struct Gpu* gpu = &_gpucb;
-int (*GPU_printf)() = printf;
+int (*GPU_printf)() = (int (*)())printf;
 static struct Debug debug = {0};
 
 int D_800B89A8[] = {1024, 1024, 1024, 1024, 1024};
