@@ -408,7 +408,7 @@ void Draw_PutDispEnv(DISPENV* disp) {
     SDL_SetWindowSize(window, w, h);
 }
 
-#define MAX_VERTEX_COUNT 600
+#define MAX_VERTEX_COUNT 1024
 #define MAX_INDEX_COUNT (MAX_VERTEX_COUNT / 4 * 6)
 
 static unsigned int VAO = -1, VBO = -1, EBO = -1;
@@ -527,10 +527,11 @@ int Draw_PushPrim(u_long* packets, int max_len) {
     bool isGouraud = (code & GOURAUD) != 0;
     bool isShadeTex = !((code & 1) && isTextured);
     ushort tpage = -1, clut = -1, pad2, pad3;
-    Vertex* v = vertex_cur;
+    Vertex* v;
 
     // to ensure we always have space, we pretend we want to allocate a quad
     Draw_EnsureBufferWillNotOverflow(4, 6);
+    v = vertex_cur;
     if (isShadeTex) {
         v->r = *packets >> 0;
         v->g = *packets >> 8;
