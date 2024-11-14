@@ -1,0 +1,2 @@
+[decompme.compilers]
+"mipsel-linux-gnu-cpp" = "gcc2.7.2-psx"
