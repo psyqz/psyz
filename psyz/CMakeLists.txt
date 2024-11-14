@@ -22,6 +22,7 @@ add_library(psyz STATIC
     ../decomp/src/libgpu/font.c
     ../decomp/src/libgpu/otag.c
     ../decomp/src/libgpu/prim.c
+    ../decomp/src/libgpu/tmd.c
     src/psyz/libgte.c
     src/psyz/libgs.c
     src/psyz/libcd.c

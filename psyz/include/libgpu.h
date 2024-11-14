@@ -528,6 +528,17 @@ typedef struct PixPattern {
 } PixPattern;
 
 /*
+ *	Multi-purpose TIM image
+ */
+typedef struct {
+    u_long  mode;		/* pixel mode */
+    RECT	*crect;		/* CLUT rectangle on frame buffer */
+    u_long	*caddr;		/* CLUT address on main memory */
+    RECT	*prect;		/* texture image rectangle on frame buffer */
+    u_long	*paddr;		/* texture image address on main memory */
+} TIM_IMAGE;
+
+/*
  * Loads a texture pattern from the memory area starting at the address pix into
  * the frame buffer area starting at the address (x, y), and calculates the
  * texture page ID for the loaded texture pattern. The texture pattern size w
@@ -616,6 +627,7 @@ extern int CheckPrim(char* s, OT_TYPE* p);
 extern int ClearImage(RECT* rect, u_char r, u_char g, u_char b);
 extern int DrawSync(int mode);
 extern int FntOpen(int x, int y, int w, int h, int isbg, int n);
+extern int GetGraphDebug(void) ;
 extern u_long* FntFlush(int id);
 extern int KanjiFntOpen(int x, int y, int w, int h, int dx, int dy, int cx,
                         int cy, int isbg, int n);
@@ -623,11 +635,13 @@ extern int LoadImage(RECT* rect, u_long* p);
 extern int MargePrim(void* p0, void* p1);
 extern int StoreImage(RECT* rect, u_long* p);
 extern int MoveImage(RECT* rect, int x, int y);
+extern int OpenTIM(u_long *addr);
 extern OT_TYPE* ClearOTag(OT_TYPE* ot, int n);
 extern OT_TYPE* ClearOTagR(OT_TYPE* ot, int n);
 extern DRAWENV* PutDrawEnv(DRAWENV* env);
 extern DISPENV* PutDispEnv(DISPENV* env);
 extern DISPENV* SetDefDispEnv(DISPENV* env, int x, int y, int w, int h);
 extern DRAWENV* SetDefDrawEnv(DRAWENV* env, int x, int y, int w, int h);
+extern TIM_IMAGE *ReadTIM(TIM_IMAGE *timimg);
 
 #endif

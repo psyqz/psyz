@@ -1,6 +1,6 @@
 #include <common.h>
-#include <og/libgte.h>
-#include <og/libgpu.h>
+#include <libgte.h>
+#include <libgpu.h>
 
 #pragma pack(push, 4)
 typedef struct {
@@ -20,22 +20,31 @@ typedef struct {
 } TMD;
 #pragma pack(pop)
 
+#ifndef __psyz
 extern u_long* tim;
 extern int n_prim;
 extern u_long* t_prim;
 extern u_long* v_ofs;
 extern u_long* n_ofs;
+#else
+static u_long* tim = 0;
+static int n_prim = 0;
+static u_long* t_prim = 0;
+static u_long* v_ofs = 0;
+static u_long* n_ofs = 0;
+#endif
+
 u_long get_tim_addr(unsigned int* addr, TIM_IMAGE*);
 u_long get_tmd_addr(
     TMD* tmd, int obj_no, u_long** t_prim, u_long** v_ofs, u_long** n_ofs);
 
-long OpenTIM(u_long* addr) {
+int OpenTIM(u_long* addr) {
     tim = addr;
     return 0;
 }
 
 TIM_IMAGE* ReadTIM(TIM_IMAGE* timimg) {
-    u_long len = get_tim_addr(tim, timimg);
+    u_long len = get_tim_addr((unsigned int*)tim, timimg);
     if (len == -1) {
         return NULL;
     }
@@ -44,7 +53,7 @@ TIM_IMAGE* ReadTIM(TIM_IMAGE* timimg) {
 }
 
 int OpenTMD(u_long* tmd, int obj_no) {
-    u_long len = get_tmd_addr(tmd, obj_no, &t_prim, &v_ofs, &n_ofs);
+    u_long len = get_tmd_addr((TMD*)tmd, obj_no, &t_prim, &v_ofs, &n_ofs);
     n_prim = len;
     return len;
 }
@@ -71,7 +80,7 @@ u_long get_tim_addr(unsigned int* timaddr, TIM_IMAGE* img) {
     if (img->mode & 8) {
         clut_len = *timaddr >> 2;
         img->crect = (RECT*)(timaddr + 1);
-        img->caddr = timaddr + 3;
+        img->caddr = (u_long*)(timaddr + 3);
         timaddr = &timaddr[clut_len];
     } else {
         img->crect = NULL;
@@ -80,7 +89,7 @@ u_long get_tim_addr(unsigned int* timaddr, TIM_IMAGE* img) {
     }
     img_len = *timaddr >> 2;
     img->prect = (RECT*)(timaddr + 1);
-    img->paddr = timaddr + 3;
+    img->paddr = (u_long*)(timaddr + 3);
     return 2 + clut_len + img_len;
 }
 
