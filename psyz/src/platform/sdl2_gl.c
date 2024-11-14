@@ -66,7 +66,7 @@ static const char gl33_fragment_shader[] = {
     "    if (tpage == 0xFFFFu) {\n"
     "        FragColor = vertexColor;\n"
     "    } else {\n"
-    "        if (tpage >= 0x80u) {\n"                   // 8-bit
+    "        if (tpage >= 0x80u) {\n" // 8-bit
     "            float colIdx = texture(tex8, texCoord).r;\n"
     "            float palIdx = floor(colIdx * 256.0) / 1024.0f;\n"
     "            vec2 clutIdx = getPsxClutXY(clut);"
@@ -197,6 +197,7 @@ bool InitPlatform() {
     }
     SDL_GL_MakeCurrent(window, glContext);
     SDL_GL_SetSwapInterval(1);
+    glLineWidth(SCREEN_SCALE);
     INFOF("opengl %s initialized", glGetString(GL_VERSION));
 
     shader_program = Init_SetupShader();
@@ -404,14 +405,15 @@ void Draw_PutDispEnv(DISPENV* disp) {
     int h = disp->disp.h * SCREEN_SCALE;
     if (wnd_width != w || wnd_height != h) {
         glViewport(0, 0, w, h);
-        glUniform2f(uniform_resolution, (float)disp->disp.w, (float)disp->disp.h);
+        glUniform2f(
+            uniform_resolution, (float)disp->disp.w, (float)disp->disp.h);
         wnd_width = w;
         wnd_height = h;
         SDL_SetWindowSize(window, w, h);
     }
 }
 
-#define MAX_VERTEX_COUNT 1024
+#define MAX_VERTEX_COUNT 4096
 #define MAX_INDEX_COUNT (MAX_VERTEX_COUNT / 4 * 6)
 
 static unsigned int VAO = -1, VBO = -1, EBO = -1;
@@ -421,6 +423,7 @@ static Vertex* vertex_cur;
 static unsigned short* index_cur;
 static unsigned short n_vertices;
 static int n_indices;
+static GLenum flush_mode = GL_TRIANGLES;
 
 static void Draw_InitBuffer() {
     glGenVertexArrays(1, &VAO);
@@ -528,7 +531,7 @@ int Draw_PushPrim(u_long* packets, int max_len) {
     bool isTile = (code & 0x40) && (code & 0x20);
     bool isTextured = (code & TEXTURED) != 0;
     bool isGouraud = (code & GOURAUD) != 0;
-    bool isShadeTex = !((code & 1) && isTextured);
+    bool isShadeTex = !((code & 1) && isTextured && !isLine);
     ushort tpage = -1, clut = -1, pad2, pad3;
     Vertex* v;
 
@@ -594,26 +597,46 @@ int Draw_PushPrim(u_long* packets, int max_len) {
             WARNF("code %02X not supported", code);
         }
     } else if (isLine) {
-        SDL_Point points[4];
+        bool padding = true;
         int nPoints = ((code >> 2) & 3) + 1;
+        if (nPoints == 1) {
+            padding = false;
+            nPoints++; // don't ask, have faith
+        }
+        Draw_FlushBuffer();
         for (int i = 0; len > 0 && i < nPoints; i++) {
-            points[i].x = ((s16*)packets)[0];
-            points[i].y = ((s16*)packets)[1];
+            vertex_cur[i].x = ((s16*)packets)[0];
+            vertex_cur[i].y = ((s16*)packets)[1];
+            vertex_cur[i].c = -1;
+            vertex_cur[i].t = -1;
             packets++;
             len--;
-            if (len > 0 && isGouraud) {
-                // TODO not supported on SDL2+OpenGL
-                packets++;
-                len--;
+            if (len > 0 && i + 1 < nPoints) {
+                if (isGouraud) {
+                    vertex_cur[i + 1].r = ((u8*)packets)[0];
+                    vertex_cur[i + 1].g = ((u8*)packets)[1];
+                    vertex_cur[i + 1].b = ((u8*)packets)[2];
+                    vertex_cur[i + 1].a = code & SEMITRANSP ? 0x80 : 0xFF;
+                    packets++;
+                    len--;
+                }
             }
-            // HACK last rgb are not read by writePacket, so we patch the amount
-            packets--;
-            len++;
         }
-        // TODO not sure how to do this with OpenGL
-        // SDL_SetRenderDrawColor(
-        //     renderer, v->r, v->g, v->b, v->a);
-        // SDL_RenderDrawLines(renderer, points, nPoints);
+        if (!isGouraud) {
+            VRGBA(vertex_cur[1]) = VRGBA(vertex_cur[2]) = VRGBA(vertex_cur[3]) =
+                VRGBA(vertex_cur[0]);
+        }
+        if (padding) {
+            len--;
+        }
+        for (int i = 0; i < nPoints - 1; i++) {
+            index_cur[i * 2] = n_vertices + i;
+            index_cur[i * 2 + 1] = n_vertices + i + 1;
+        }
+        flush_mode = GL_LINES;
+        Draw_EnqueueBuffer(nPoints, (nPoints - 1) * 2);
+        Draw_FlushBuffer();
+        flush_mode = GL_TRIANGLES;
     } else if (isTile) {
         int x, y, w, h, tu, tv;
         x = ((s16*)packets)[0];
@@ -785,6 +808,6 @@ void Draw_FlushBuffer(void) {
     glBufferSubData(
         GL_ELEMENT_ARRAY_BUFFER, 0, sizeof(*index_buf) * n_indices, index_buf);
     glBindVertexArray(VAO);
-    glDrawElements(GL_TRIANGLES, n_indices, GL_UNSIGNED_SHORT, 0);
+    glDrawElements(flush_mode, n_indices, GL_UNSIGNED_SHORT, 0);
     Draw_ResetBuffer();
 }
