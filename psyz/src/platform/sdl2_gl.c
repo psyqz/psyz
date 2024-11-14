@@ -65,35 +65,47 @@ static const char gl33_fragment_shader[] = {
     "}\n"
     "\n"
     "void main() {\n"
+    "    vec4 texColor;\n"
     "    if (tpage == 0xFFFFu) {\n"
-    "        FragColor = vertexColor;\n"
-    "    } else if (tpage >= 0x100u) {\n" // 16-bit
-    "        vec4 color = texture(tex16, texCoord);"
-    "        color.a /= 2;"
-    "        FragColor = color * vertexColor * 2;\n"
-    "    } else if (tpage >= 0x80u) {\n" // 8-bit
-    "        float colIdx = texture(tex8, texCoord).r;\n"
-    "        float palIdx = floor(colIdx * 256.0) / 1024.0f;\n"
-    "        vec2 clutIdx = getPsxClutXY(clut);"
-    "        vec2 palCoord = clutIdx + vec2(palIdx, 0);"
-    "        vec4 palColor = texture(tex16, palCoord);"
-    "        palColor.a /= 2;"
-    "        FragColor = palColor * vertexColor * 2;\n"
-    "    }\n"
-    "    else {\n" // 4-bit
-    "        float colIdx = texture(tex4, texCoord).r;\n"
-    "        float palIdx = floor(colIdx * 256.0) / 1024.0f;\n"
-    "        vec2 clutIdx = getPsxClutXY(clut);"
-    "        vec2 palCoord = clutIdx + vec2(palIdx, 0);"
-    "        vec4 palColor = texture(tex16, palCoord);"
-    "        palColor.a /= 2;"
-    "        FragColor = palColor * vertexColor * 2;\n"
-    "    }\n"
-    "    if (FragColor == vec4(0, 0, 0, 0)) {\n"
-    "        // implicitly discard pixel\n"
+    "        texColor = vec4(1, 1, 1, 2);\n"
+    "    } else if ((tpage & 0x180u) >= 0x100u) {\n" // 16-bit
+    "        texColor = texture(tex16, texCoord);\n"
     "    } else {\n"
-    "        FragColor.a = 1.0f;"
+    "        float colIdx;\n"
+    "        if (tpage >= 0x80u) {\n" // 8-bit
+    "            colIdx = texture(tex8, texCoord).r;\n"
+    "        } else {\n" // 4-bit
+    "            colIdx = texture(tex4, texCoord).r;\n"
+    "        }\n"
+    "        float colorIdx = floor(colIdx * 256.0) / 1024.0f;\n"
+    "        vec2 colorCoord = getPsxClutXY(clut) + vec2(colorIdx, 0);\n"
+    "        texColor = texture(tex16, colorCoord);\n"
     "    }\n"
+    // check for full transparency
+    "    bool colorDiscard = texColor == vec4(0, 0, 0, 0);"
+    "    if (!colorDiscard) {\n"
+    // check for setSemiTrans(p, 1)
+    "        bool isSemiTrans = vertexColor.a < 0.75;"
+    // when a color has the 0x8000 bit left then it has the semitrans flag on
+    "        bool colorSemiTrans = texColor.a > 0;"
+    "        if (colorSemiTrans && isSemiTrans) {\n"
+    "            uint abr = (tpage & 0x60u) >> 5u;\n"
+    "            if (abr == 0u) {\n"
+    "                texColor.a = 1;\n" // 50% opacity
+    "            } else if (abr == 1u) {\n"
+    "                texColor.a = 1;\n" // TODO additive blending
+    "            } else if (abr == 2u) {\n"
+    "                texColor.a = 1;\n" // TODO subtractive blending
+    "            } else {\n" // abr == 3u
+    "                texColor.a = 0.5;\n" // 25% opacity?
+    "            }\n"
+    "        } else {\n"
+    "            texColor.a = 2;\n" // full opacity
+    "        }\n"
+    "    } else {\n"
+    "        texColor.a = 0;\n"
+    "    }\n"
+    "    FragColor = texColor * vertexColor * vec4(2, 2, 2, 1);\n"
     "}\n"};
 
 typedef struct {
