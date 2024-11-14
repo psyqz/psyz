@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <fcntl.h>
 
 #ifdef __psyz
 // stub unix implementations
@@ -15,6 +16,13 @@
 #define read my_read
 #define write my_write
 #define ioctl my_ioctl
+//int my_open(const char *devname, int flag, ...);
+int my_open(const char *devname, int flag);
+int my_close(int fd);
+long my_lseek(long fd, long offset, long flag);
+long my_read(long fd, void *buf, long n);
+long my_write(long fd, void *buf, long n);
+long my_ioctl(long fd, long com, long arg);
 #endif
 
 #define PAD_COUNT 2

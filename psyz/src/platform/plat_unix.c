@@ -196,7 +196,7 @@ long my_erase(char* path) {
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/ioctl.h>
-long my_open(char *devname, unsigned long flag) {
+int my_open(const char *devname, int flag) {
     // only map the known flags and discard the rest
     int oflag = (int)flag & (O_WRONLY | O_RDWR | O_NONBLOCK | O_CREAT);
     char path[0x100];
@@ -220,7 +220,7 @@ long my_open(char *devname, unsigned long flag) {
         return open(path, oflag);
     }
 }
-long my_close(long fd) { return (long)close((int)fd); }
+int my_close(int fd) { return (long)close((int)fd); }
 long my_lseek(long fd, long offset, long flag) { return lseek((int)fd, (off_t)offset, (int)flag); }
 long my_read(long fd, void *buf, long n) { return (long)read((int)fd, buf, (size_t)n); }
 long my_write(long fd, void *buf, long n) { return (long)write((int)fd, buf, (size_t)n); }
