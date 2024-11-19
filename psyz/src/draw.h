@@ -20,6 +20,51 @@ typedef struct {
     u_long tex_flip_x : 1;
     u_long tex_flip_y : 1;
 } ParamDrawTexpageMode;
+
+// https://psx-spx.consoledev.net/graphicsprocessingunitgpu/#gp108h-display-mode
+typedef struct {
+    unsigned int horizontal_resolution : 2;     // 0=256, 1=320, 2=512, 3=640
+    unsigned int vertical_resolution : 1;       // 0=240p, 1=480i
+    unsigned int pal : 1;                       // 0=NTSC/60Hz, 1=PAL/50Hz
+    unsigned int rgb24 : 1;                     // 0=15bit, 1=24bit
+    unsigned int interlaced : 1;                // 0=Off, 1=On
+    unsigned int horizontal_resolution_368 : 1; // 0=256/320/512/640, 1=368
+    unsigned int reversed : 1;                  // 0=Off, 1=On
+    unsigned int : 24;
+} DisplayMode;
+
+// Reset everything related to the drawing logic.
+// Implements ResetGraph.
+// https://psx-spx.consoledev.net/graphicsprocessingunitgpu/#gp100h-reset-gpu
+void Draw_Reset();
+
+// Allow to display the rendered content.
+// On real hardware setting this to off will display a black screen.
+// Implements SetDispMask.
+// https://psx-spx.consoledev.net/graphicsprocessingunitgpu/#gp103h-display-enable
+void Draw_DisplayEnable(unsigned int on);
+
+// Defines which location of the VRAM should be displayed. This essentially
+// chooses which framebuffer is going to be used.
+// Implements PutDispEnv.
+// https://psx-spx.consoledev.net/graphicsprocessingunitgpu/#gp105h-start-of-display-area-in-vram
+void Draw_DisplayArea(unsigned int x, unsigned int y);
+
+// Set range of horizontal lines to display.
+// Implements PutDispEnv.
+// https://psx-spx.consoledev.net/graphicsprocessingunitgpu/#gp106h-horizontal-display-range-on-screen
+void Draw_DisplayHorizontalRange(unsigned int start, unsigned int end);
+
+// Set range of vertical lines to display.
+// The range changes between PAL and NTSC.
+// Implements PutDispEnv, SetVideoMode.
+// https://psx-spx.consoledev.net/graphicsprocessingunitgpu/#gp107h-vertical-display-range-on-screen
+void Draw_DisplayVerticalRange(unsigned int start, int unsigned end);
+
+// Set various properties such as refresh rate, interlaced mode, 24bpp mode, etc
+// Implements PutDispEnv
+void Draw_SetDisplayMode(DisplayMode* mode);
+
 void Draw_SetTexpageMode(ParamDrawTexpageMode* p);
 void Draw_SetTextureWindow(int mask_x, int mask_y, int off_x, int off_y);
 void Draw_SetAreaStart(int x, int y);

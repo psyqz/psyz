@@ -23,6 +23,11 @@ long SetVideoMode(long mode) {
     return prev;
 }
 
+int SetIntrMask(int arg) {
+    NOT_IMPLEMENTED;
+    return 0;
+}
+
 int StopCallback(void) { NOT_IMPLEMENTED; }
 int ResetCallback(void) { NOT_IMPLEMENTED; }
 void* DMACallback(int dma, void (*func)()) {

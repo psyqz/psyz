@@ -531,11 +531,11 @@ typedef struct PixPattern {
  *	Multi-purpose TIM image
  */
 typedef struct {
-    u_long  mode;		/* pixel mode */
-    RECT	*crect;		/* CLUT rectangle on frame buffer */
-    u_long	*caddr;		/* CLUT address on main memory */
-    RECT	*prect;		/* texture image rectangle on frame buffer */
-    u_long	*paddr;		/* texture image address on main memory */
+    u_long mode;   /* pixel mode */
+    RECT* crect;   /* CLUT rectangle on frame buffer */
+    u_long* caddr; /* CLUT address on main memory */
+    RECT* prect;   /* texture image rectangle on frame buffer */
+    u_long* paddr; /* texture image address on main memory */
 } TIM_IMAGE;
 
 /*
@@ -572,7 +572,7 @@ extern void CatPrim(void* p0, void* p1);
 extern void DrawOTag(OT_TYPE* p);
 extern void DrawOTagIO(OT_TYPE* p);
 extern void DrawOTagEnv(OT_TYPE* p, DRAWENV* env);
-extern void DrawPrim(OT_TYPE* p);
+extern void DrawPrim(void* p);
 extern void DumpClut(u_short clut);
 extern void DumpDispEnv(DISPENV* env);
 extern void DumpDrawEnv(DRAWENV* env);
@@ -627,7 +627,7 @@ extern int CheckPrim(char* s, OT_TYPE* p);
 extern int ClearImage(RECT* rect, u_char r, u_char g, u_char b);
 extern int DrawSync(int mode);
 extern int FntOpen(int x, int y, int w, int h, int isbg, int n);
-extern int GetGraphDebug(void) ;
+extern int GetGraphDebug(void);
 extern u_long* FntFlush(int id);
 extern int KanjiFntOpen(int x, int y, int w, int h, int dx, int dy, int cx,
                         int cy, int isbg, int n);
@@ -635,13 +635,13 @@ extern int LoadImage(RECT* rect, u_long* p);
 extern int MargePrim(void* p0, void* p1);
 extern int StoreImage(RECT* rect, u_long* p);
 extern int MoveImage(RECT* rect, int x, int y);
-extern int OpenTIM(u_long *addr);
+extern int OpenTIM(u_long* addr);
 extern OT_TYPE* ClearOTag(OT_TYPE* ot, int n);
 extern OT_TYPE* ClearOTagR(OT_TYPE* ot, int n);
 extern DRAWENV* PutDrawEnv(DRAWENV* env);
 extern DISPENV* PutDispEnv(DISPENV* env);
 extern DISPENV* SetDefDispEnv(DISPENV* env, int x, int y, int w, int h);
 extern DRAWENV* SetDefDrawEnv(DRAWENV* env, int x, int y, int w, int h);
-extern TIM_IMAGE *ReadTIM(TIM_IMAGE *timimg);
+extern TIM_IMAGE* ReadTIM(TIM_IMAGE* timimg);
 
 #endif

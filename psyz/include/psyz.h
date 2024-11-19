@@ -16,12 +16,12 @@
 #define read my_read
 #define write my_write
 #define ioctl my_ioctl
-//int my_open(const char *devname, int flag, ...);
-int my_open(const char *devname, int flag);
+// int my_open(const char *devname, int flag, ...);
+int my_open(const char* devname, int flag);
 int my_close(int fd);
 long my_lseek(long fd, long offset, long flag);
-long my_read(long fd, void *buf, long n);
-long my_write(long fd, void *buf, long n);
+long my_read(long fd, void* buf, long n);
+long my_write(long fd, void* buf, long n);
 long my_ioctl(long fd, long com, long arg);
 #endif
 
@@ -49,6 +49,9 @@ long my_ioctl(long fd, long com, long arg);
 #define VRAM_W 1024
 #define VRAM_H 512
 #define VRAM_STRIDE 2048
+
+#define NOP
+#define CLAMP(x, min, max) x < min ? min : (x > max ? max : x)
 
 #ifndef LEN
 #define LEN(x) ((s32)(sizeof(x) / sizeof(*(x))))

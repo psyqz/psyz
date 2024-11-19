@@ -95,8 +95,8 @@ static const char gl33_fragment_shader[] = {
     "            } else if (abr == 1u) {\n"
     "                texColor.a = 1;\n" // TODO additive blending
     "            } else if (abr == 2u) {\n"
-    "                texColor.a = 1;\n" // TODO subtractive blending
-    "            } else {\n" // abr == 3u
+    "                texColor.a = 1;\n"   // TODO subtractive blending
+    "            } else {\n"              // abr == 3u
     "                texColor.a = 0.5;\n" // 25% opacity?
     "            }\n"
     "        } else {\n"
@@ -113,6 +113,9 @@ typedef struct {
     unsigned short u, v, c, t;
     unsigned char r, g, b, a;
 } Vertex;
+typedef struct {
+    GLint x, y, w, h;
+} GLrecti;
 
 #define VRGBA(p) (*(unsigned int*)(&((p).r)))
 #define SET_TC(p, tpage, clut) (p)->t = (u16)tpage, (p)->c = (u16)clut;
@@ -141,6 +144,7 @@ static GLuint vram_textures[Num_Tex];
 static bool is_vram_texture_invalid = false;
 static SDL_AudioSpec audio_specs = {0};
 static SDL_AudioDeviceID audio_device_id = {0};
+static GLrecti scissor = {0};
 
 static GLuint Init_CompileShader(const char* source, GLenum kind) {
     GLuint shader = glCreateShader(kind);
@@ -188,6 +192,18 @@ static GLuint Init_SetupShader() {
     return program;
 }
 
+static bool disp_on = false;
+static int set_wnd_width = 256;
+static int set_wnd_height = 240;
+static int set_wnd_scale = SCREEN_SCALE;
+static int cur_wnd_width = -1;
+static int cur_wnd_height = -1;
+static int cur_wnd_scale = -1;
+static int set_disp_horiz = 256;
+static int set_disp_vert = 240;
+static int cur_disp_horiz = -1;
+static int cur_disp_vert = -1;
+
 void ResetPlatform(void);
 bool InitPlatform() {
     atexit(ResetPlatform);
@@ -201,11 +217,11 @@ bool InitPlatform() {
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
     SDL_GL_SetAttribute(
         SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-
+    cur_wnd_height = DISP_HEIGHT;
     window = SDL_CreateWindow(
         "PSY-Z", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
         DISP_WIDTH * SCREEN_SCALE, DISP_HEIGHT * SCREEN_SCALE,
-        SDL_WINDOW_OPENGL);
+        SDL_WINDOW_OPENGL | SDL_WINDOW_HIDDEN);
     if (!window) {
         ERRORF("SDL_CreateWindow: %s", SDL_GetError());
         return false;
@@ -406,32 +422,99 @@ u_long MyPadRead(int id) {
     return pressed;
 }
 
-int Draw_Sync(int mode) {
-    PollEvents();
-    SDL_GL_SwapWindow(window);
-    return 0;
-}
-
-int wnd_width = -1;
-int wnd_height = -1;
-RECT g_SetDisp = {0};
-RECT g_PrevDisp = {0};
-void Draw_PutDispEnv(DISPENV* disp) {
+static bool is_window_visible = false;
+static void ApplyDisplayPendingChanges() {
+    if (!disp_on) {
+        return;
+    }
     if (!window) {
         InitPlatform();
+        is_window_visible = false;
     }
-    g_PrevDisp = g_SetDisp;
-    g_SetDisp = disp->disp;
-    int w = disp->disp.w * SCREEN_SCALE;
-    int h = disp->disp.h * SCREEN_SCALE;
-    if (wnd_width != w || wnd_height != h) {
+    if (cur_wnd_width != set_wnd_width || cur_wnd_height != set_wnd_height ||
+        cur_wnd_scale != set_wnd_scale) {
+        cur_wnd_width = set_wnd_width;
+        cur_wnd_height = set_wnd_height;
+        cur_wnd_scale = set_wnd_scale;
+        int w = cur_wnd_width * cur_wnd_scale;
+        int h = cur_wnd_height * cur_wnd_scale;
+        SDL_SetWindowSize(window, w, h);
         glViewport(0, 0, w, h);
         glUniform2f(
-            uniform_resolution, (float)disp->disp.w, (float)disp->disp.h);
-        wnd_width = w;
-        wnd_height = h;
-        SDL_SetWindowSize(window, w, h);
+            uniform_resolution, (float)cur_wnd_width, (float)cur_wnd_height);
     }
+    if (!is_window_visible) {
+        SDL_ShowWindow(window);
+        is_window_visible = true;
+    }
+    if (cur_disp_horiz != set_disp_horiz || cur_disp_vert != set_disp_vert) {
+        cur_disp_horiz = set_disp_horiz;
+        cur_disp_vert = set_disp_vert;
+        WARNF("setting screen aspect ratio not supported");
+    }
+}
+
+void Draw_Reset() { NOT_IMPLEMENTED; }
+
+void Draw_DisplayEnable(unsigned int on) {
+    disp_on = on;
+    if (!on) {
+        // TODO unbind the frame buffer and display a black screen
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+        glClearColor(0, 0, 0, 1);
+        glClear(GL_COLOR_BUFFER_BIT);
+    } else {
+        ApplyDisplayPendingChanges();
+    }
+}
+
+void Draw_DisplayArea(unsigned int x, unsigned int y) {
+    NOT_IMPLEMENTED;
+    ApplyDisplayPendingChanges();
+    SDL_GL_SwapWindow(window);
+}
+
+void Draw_DisplayHorizontalRange(unsigned int start, unsigned int end) {
+    set_disp_horiz = (int)(end - start) / 10;
+    ApplyDisplayPendingChanges();
+}
+
+void Draw_DisplayVerticalRange(unsigned int start, int unsigned end) {
+    set_disp_vert = (int)(end - start);
+    ApplyDisplayPendingChanges();
+}
+
+void Draw_SetDisplayMode(DisplayMode* mode) {
+    // TODO the interlace flag is ignored
+    // TODO rgb24 is ignored, the color output will always max the color space
+    if (mode->reversed) {
+        WARNF("reverse mode not supported");
+    }
+    if (mode->horizontal_resolution_368) {
+        set_wnd_width = 368;
+    } else {
+        switch (mode->horizontal_resolution) {
+        case 0:
+            set_wnd_width = 256;
+            break;
+        case 1:
+            set_wnd_width = 320;
+            break;
+        case 2:
+            set_wnd_width = 512;
+            break;
+        case 3:
+            set_wnd_width = 640;
+            break;
+        }
+    }
+    set_wnd_height = mode->vertical_resolution ? 480 : 240;
+    ApplyDisplayPendingChanges();
+}
+
+int Draw_Sync(int mode) {
+    PollEvents();
+    return 0;
 }
 
 #define MAX_VERTEX_COUNT 4096
@@ -471,8 +554,6 @@ static void Draw_InitBuffer() {
     glEnableVertexAttribArray(1);
     glBindVertexArray(0);
 }
-
-void Draw_FlushBuffer(void);
 static inline void Draw_EnsureBufferWillNotOverflow(int vertices, int indices) {
     bool bufferFull = n_vertices + vertices > MAX_VERTEX_COUNT ||
                       n_indices + indices > MAX_INDEX_COUNT;
@@ -753,28 +834,29 @@ void Draw_SetOffset(int x, int y) {
     // implements SetDrawEnv, SetDrawOffset
     NOT_IMPLEMENTED;
 }
+static bool DoRectTouch(RECT* r1, RECT* r2) {
+    return !(r1->x + r1->w <= r2->x || r2->x + r2->w <= r1->x ||
+             r1->y + r1->h <= r2->y || r2->y + r2->h <= r1->y);
+}
 void Draw_ClearImage(RECT* rect, u_char r, u_char g, u_char b) {
-    // TODO HACK comparing both g_SetDisp and g_PrevDisp because in one of the
-    // samples PutDrawEnv is called after PutDispEnv, clearing the buffer that
-    // is currently in the background instead of the front one
-    if ((rect->x == g_SetDisp.x && rect->y == g_SetDisp.y &&
-         rect->w == g_SetDisp.w && rect->h == g_SetDisp.h) ||
-        rect->x == g_PrevDisp.x && rect->y == g_PrevDisp.y &&
-            rect->w == g_PrevDisp.w && rect->h == g_PrevDisp.h) {
+    // TODO need support for scissor, otherwise screen will flicker
+    if (rect->x == 0) { // hack because we do not know what FB to clear
         glClearColor(
             (float)r / 255.f, (float)g / 255.f, (float)b / 255.f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
-        return;
-    } else {
-        WARNF("TODO implement partial clear screen");
     }
 
-    u16* vram = g_RawVram;
-    vram += rect->x + rect->y * VRAM_W;
+    RECT fixedRect;
+    fixedRect.x = CLAMP(rect->x, 0, 1024);
+    fixedRect.y = CLAMP(rect->y, 0, 1024);
+    fixedRect.w = CLAMP(rect->w, 0, 1024);
+    fixedRect.h = CLAMP(rect->h, 0, 1024);
 
-    for (int i = 0; i < rect->h; i++) {
-        for (int j = 0; j < rect->w; j++) {
-            vram[j] = (r >> 3 << 5) | (g >> 3 << 10) | (b >> 3 << 15) | 0x8000;
+    u16* vram = g_RawVram;
+    vram += fixedRect.x + fixedRect.y * VRAM_W;
+    for (int i = 0; i < fixedRect.h; i++) {
+        for (int j = 0; j < fixedRect.w; j++) {
+            vram[j] = (r >> 3 << 5) | (g >> 3 << 10) | (b >> 3 << 15);
         }
         vram += VRAM_W;
     }

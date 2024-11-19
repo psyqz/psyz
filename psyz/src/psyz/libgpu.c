@@ -11,8 +11,14 @@ SPRT_8 sprt[0x400];
 u16 tpage;
 u16 clut;
 u_char ctlbuf[0x100];
+u_char _que[0x1800];
 
-const int RETAIL_CONSOLE_TYPE = 0; // I think?
+typedef enum {
+    // https://psx-spx.consoledev.net/graphicsprocessingunitgpu/#gpu-versions
+    GPU_V0, // 1MB VRAM, retail
+    GPU_V1, // 2MB VRAM, arcade
+    GPU_V2, // 2MB VRAM, PSone
+} GpuVersion;
 
 struct Gpu {
     /* 0x00 */ const char* ver;
@@ -37,58 +43,6 @@ struct Gpu {
 
 static int queue_len = 0;
 static u_long queue_buf[0x4000];
-int GPU_Enqueue(u_long p1, u_long p2) {
-    int mask = (int)p2;
-    if (mask) {
-        WARNF("mask not supported (mask:%08X)", mask);
-    }
-    DR_ENV* env = (DR_ENV*)p1;
-    while (true) {
-        if (queue_len + env->len > LEN(queue_buf)) {
-            WARNF("GPU QUEUE FULL");
-        } else if (sizeof(u_long) == 4) {
-            // this is fine on 32-bit systems
-            memcpy(queue_buf + queue_len, env->code, env->len * sizeof(u_long));
-        } else if (sizeof(u_long) == 8) {
-            // Wow okay, this part is uuuugly...
-            // Gpu code is usually written to a u_long array, which will work
-            // fine on both 32-bit and 64-bit compiled code.
-            // But primitives are mapped from structs, we need to align the data
-            int code = getcode(env) & ~3;
-            if (code >= 0x20 && code < 0x80) {
-                // it is a prim, we need to split
-                u32* prim_data = (u32*)env->code;
-                for (u_long i = 0; i < env->len; i++) {
-                    queue_buf[queue_len + i] = prim_data[i];
-                }
-            } else {
-                // TODO this is a temporary solution:
-                // if gpu commands get merged with primitives, this will not
-                // work
-                memcpy(queue_buf + queue_len, env->code,
-                       env->len * sizeof(u_long));
-            }
-        }
-        queue_len += (int)env->len;
-        if (isendprim(env)) {
-            break;
-        }
-        env = (DR_ENV*)nextPrim(env);
-    }
-    return queue_len;
-}
-static int GPU_Clear(u_long p1, u_long p2) {
-    Draw_ClearImage((RECT*)p1, p2 & 0xFF, (p2 >> 8) & 0xFF, (p2 >> 16) & 0xFF);
-    return 0;
-}
-static int GPU_DataWrite(u_long p1, u_long p2) {
-    Draw_LoadImage((RECT*)p1, (u_long*)p2);
-    return 0;
-}
-static int GPU_DataRead(u_long p1, u_long p2) {
-    Draw_StoreImage((RECT*)p1, (u_long*)p2);
-    return 0;
-}
 static int GPU_Sync(int mode) {
     RECT rect;
     Draw_ResetBuffer();
@@ -139,11 +93,58 @@ static int GPU_Sync(int mode) {
     queue_len = 0;
     return queue_len;
 }
-
-DISPENV* PutDispEnv(DISPENV* env) {
-    Draw_PutDispEnv(env);
-    GPU_Sync(0);
-    return env;
+int GPU_Enqueue(u_long p1, u_long p2) {
+    int mask = (int)p2;
+    if (mask) {
+        WARNF("mask not supported (mask:%08X)", mask);
+    }
+    DR_ENV* env = (DR_ENV*)p1;
+    while (true) {
+        if (queue_len + env->len > LEN(queue_buf)) {
+            WARNF("GPU QUEUE FULL");
+        } else if (sizeof(u_long) == 4) {
+            // this is fine on 32-bit systems
+            memcpy(queue_buf + queue_len, env->code, env->len * sizeof(u_long));
+        } else if (sizeof(u_long) == 8) {
+            // Wow okay, this part is uuuugly...
+            // Gpu code is usually written to a u_long array, which will work
+            // fine on both 32-bit and 64-bit compiled code.
+            // But primitives are mapped from structs, we need to align the data
+            int code = getcode(env) & ~3;
+            if (code >= 0x20 && code < 0x80) {
+                // it is a prim, we need to split
+                u32* prim_data = (u32*)env->code;
+                for (u_long i = 0; i < env->len; i++) {
+                    queue_buf[queue_len + i] = prim_data[i];
+                }
+            } else {
+                // TODO this is a temporary solution:
+                // if gpu commands get merged with primitives, this will not
+                // work
+                memcpy(queue_buf + queue_len, env->code,
+                       env->len * sizeof(u_long));
+            }
+        }
+        queue_len += (int)env->len;
+        if (isendprim(env)) {
+            break;
+        }
+        env = (DR_ENV*)nextPrim(env);
+    }
+    // TODO this draws immediately, on PSX this happens asynchronously
+    return GPU_Sync(0);
+}
+static int GPU_Clear(u_long p1, u_long p2) {
+    Draw_ClearImage((RECT*)p1, p2 & 0xFF, (p2 >> 8) & 0xFF, (p2 >> 16) & 0xFF);
+    return 0;
+}
+static int GPU_DataWrite(u_long p1, u_long p2) {
+    Draw_LoadImage((RECT*)p1, (u_long*)p2);
+    return 0;
+}
+static int GPU_DataRead(u_long p1, u_long p2) {
+    Draw_StoreImage((RECT*)p1, (u_long*)p2);
+    return 0;
 }
 
 static int psyz_addque2(
@@ -158,7 +159,33 @@ static int psyz_clr() {
     NOT_IMPLEMENTED;
     return 0;
 }
-static void psyz_ctl(unsigned int cmd) { NOT_IMPLEMENTED; }
+static void psyz_ctl(unsigned int cmd) {
+    unsigned char op = (cmd >> 24) & 0x3F;
+    switch (op) {
+    case 0:
+        Draw_Reset();
+        break;
+    case 3:
+        Draw_DisplayEnable(!(cmd & 1));
+        break;
+    case 5:
+        Draw_DisplayArea(cmd & 0x3FF, (cmd >> 10) & 0x3FF);
+        break;
+    case 6:
+        Draw_DisplayHorizontalRange(cmd & 0xFFF, (cmd >> 12) & 0xFFF);
+        break;
+    case 7:
+        Draw_DisplayVerticalRange(cmd & 0x3FF, (cmd >> 10) & 0x3FF);
+        break;
+    case 8:
+        cmd &= 0xFFFFFF;
+        Draw_SetDisplayMode((DisplayMode*)&cmd);
+        break;
+    default:
+        WARNF("unhandled ctl %02X (%08X)", op, cmd);
+        break;
+    }
+}
 static int psyz_cwb() {
     NOT_IMPLEMENTED;
     return 0;
@@ -176,10 +203,7 @@ static int psyz_param(int) {
     NOT_IMPLEMENTED;
     return 0;
 }
-static int psyz_reset(int) {
-    NOT_IMPLEMENTED;
-    return 0;
-}
+static int psyz_reset(int) { return GPU_V0; }
 static u_long psyz_status(void) {
     NOT_IMPLEMENTED;
     return 0;
@@ -189,21 +213,9 @@ static int psyz_sync(int) {
     return 0;
 }
 
-#define CLAMP(value, low, high)                                                \
-    value < low ? low : (value > high ? high : value)
-u_long get_cs(short x, short y) {
-    x = CLAMP(x, 0, 1023);
-    y = CLAMP(y, 0, 511);
-    return 0xE3000000 | ((y & 0x3FF) << 10) | (x & 0x3FF);
-}
-u_long get_ce(short x, short y) {
-    x = CLAMP(x, 0, 1023);
-    y = CLAMP(y, 0, 511);
-    return 0xE4000000 | ((y & 0x3FF) << 10) | (x & 0x3FF);
-}
-u_long get_ofs(short x, short y) {
-    return 0xE5000000 | ((y & 0x7FF) << 11) | (x & 0x7FF);
-}
+u_long get_dx(DISPENV* env) { return env->disp.x; }
+
+int psyz_gpu_version(int mode) { return GPU_V0; }
 
 void GPU_cw(u_long* param) {
     struct Gpu* gpu = (struct Gpu*)param;
@@ -228,11 +240,8 @@ void GPU_cw(u_long* param) {
 // these are not yet decompiled
 int _addque2() { return 0; }
 int _clr() { return 0; }
-s32 _cwb() { return 0; }
-int _cwc(OT_TYPE* p, int mask) { return 0; }
 int _drs() { return 0; }
 int _dws() { return 0; }
 int _exeque() { return 0; }
 void _otc(OT_TYPE* ot, s32 n) {}
-int _reset(int mode) { return RETAIL_CONSOLE_TYPE; }
 int _sync(int) {}

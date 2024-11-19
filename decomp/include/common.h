@@ -14,7 +14,11 @@ typedef unsigned int u32;
 #define NULL 0
 #define LEN(x) ((s32)(sizeof(x) / sizeof(*(x))))
 #define OFF(type, field) ((size_t)(&((type*)0)->field))
+#ifdef PERMUTER
+#define NOP
+#else
 #define NOP __asm("nop")
+#endif
 #define CLAMP(x, min, max) x < min ? min : (x > max ? max : x)
 
 #ifndef PERMUTER
