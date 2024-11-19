@@ -34,6 +34,7 @@ struct Debug {
     DISPENV disp;
 };
 
+#define info D_800B8928
 #define gpu D_800B8920
 #define debug D_800B8928
 
@@ -333,7 +334,74 @@ DRAWENV* GetDrawEnv(DRAWENV* env) {
     return env;
 }
 
-INCLUDE_ASM("asm/nonmatchings/libgpu/sys", PutDispEnv);
+#define RECT_EQ(r1, r2)                                                        \
+    (((volatile RECT*)r1)->x == r2.x && ((volatile RECT*)r1)->y == r2.y &&     \
+     ((volatile RECT*)r1)->w == r2.w && ((volatile RECT*)r1)->h == r2.h)
+u_long get_dx(DISPENV* env);
+DISPENV* PutDispEnv(DISPENV* env) {
+    s32 h_start, h_end;
+    s32 v_start, v_end;
+    s32 mode;
+
+    mode = 0x08000000;
+    if (info.level >= 2) {
+        GPU_printf("PutDispEnv(%08x)...\n", env);
+    }
+    D_800B8920->ctl(
+        info.type == 1 || info.type == 2
+            ? ((env->disp.y & 0xFFF) << 12) | (get_dx(env) & 0xFFF) | 0x05000000
+            : ((env->disp.y & 0x3FF) << 10) | (env->disp.x & 0x3FF) |
+                  0x05000000);
+    if (!RECT_EQ(&info.disp.screen, env->screen)) {
+        env->pad0 = GetVideoMode();
+        h_start = env->screen.x * 10 + 0x260;
+        v_start = env->screen.y + (env->pad0 ? 0x13 : 0x10);
+        h_end = h_start + (env->screen.w ? env->screen.w * 10 : 2560);
+        v_end = v_start + (env->screen.h ? env->screen.h : 240);
+        h_start = CLAMP(h_start, 500, 3290);
+        h_end = CLAMP(h_end, h_start + 0x50, 3290);
+        v_start = CLAMP(v_start, 0x10, (env->pad0 ? 310 : 256));
+        v_end = CLAMP(v_end, v_start + 2, (env->pad0 ? 312 : 258));
+        D_800B8920->ctl( // set horizontal display range
+            ((h_end & 0xFFF) << 12) | 0x06000000 | (h_start & 0xFFF));
+        D_800B8920->ctl( // set vertical display range
+            ((v_end & 0x3FF) << 10) | 0x07000000 | (v_start & 0x3FF));
+    }
+    if (info.disp.isinter != env->isinter ||
+        info.disp.isrgb24 != env->isrgb24 || info.disp.pad0 != env->pad0 ||
+        info.disp.pad1 != env->pad1 || !RECT_EQ(&info.disp.disp, env->disp)) {
+        env->pad0 = GetVideoMode();
+        if (env->pad0 == MODE_PAL) {
+            mode |= 0x8;
+        }
+        if (env->isrgb24) {
+            mode |= 0x10;
+        }
+        if (env->isinter) {
+            mode |= 0x20;
+        }
+        if (info.reverse) {
+            mode |= 0x80;
+        }
+        if (env->disp.w <= 280) {
+        } else if (env->disp.w <= 352) {
+            mode |= 1;
+        } else if (env->disp.w <= 400) {
+            mode |= 0x40;
+        } else if (env->disp.w <= 560) {
+            mode |= 2;
+        } else {
+            mode |= 3;
+        }
+        if (env->disp.h <= (!env->pad0 ? 256 : 288)) {
+        } else {
+            mode |= 0x24;
+        }
+        D_800B8920->ctl(mode);
+    }
+    memcpy((u8*)&info.disp, (u8*)env, sizeof(DISPENV));
+    return env;
+}
 
 DISPENV* GetDispEnv(DISPENV* env) {
     memcpy(env, &debug.disp, sizeof(DISPENV));
