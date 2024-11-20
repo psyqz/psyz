@@ -132,6 +132,10 @@ enum TexKind {
 static u16 g_RawVram[VRAM_W * VRAM_H];
 static SDL_Window* window = NULL;
 static SDL_GLContext glContext = NULL;
+static GLuint fb[2] = {0, 0};
+static GLuint fbtex[2] = {0, 0};
+static RECT fbrect[2] = {{0}, {0}};
+static unsigned int fb_index = 0;
 static GLuint shader_program = 0;
 static Uint32 elapsed_from_beginning = 0;
 static Uint32 last_vsync = 0;
@@ -203,6 +207,7 @@ static int set_disp_horiz = 256;
 static int set_disp_vert = 240;
 static int cur_disp_horiz = -1;
 static int cur_disp_vert = -1;
+static int fb_w = 0, fb_h = 0;
 
 void ResetPlatform(void);
 bool InitPlatform() {
@@ -326,6 +331,12 @@ void ResetPlatform(void) {
         glDeleteTextures(LEN(vram_textures), vram_textures);
         memset(vram_textures, 0, LEN(vram_textures));
     }
+    if (fb[0]) {
+        glDeleteFramebuffers(LEN(fb), fb);
+        glDeleteTextures(LEN(fbtex), fbtex);
+        memset(fb, 0, LEN(fb));
+        memset(fbtex, 0, LEN(fbtex));
+    }
     if (glContext) {
         SDL_GL_DeleteContext(glContext);
         glContext = NULL;
@@ -436,12 +447,39 @@ static void ApplyDisplayPendingChanges() {
         cur_wnd_width = set_wnd_width;
         cur_wnd_height = set_wnd_height;
         cur_wnd_scale = set_wnd_scale;
-        int w = cur_wnd_width * cur_wnd_scale;
-        int h = cur_wnd_height * cur_wnd_scale;
-        SDL_SetWindowSize(window, w, h);
-        glViewport(0, 0, w, h);
+        fb_w = cur_wnd_width * cur_wnd_scale;
+        fb_h = cur_wnd_height * cur_wnd_scale;
+        SDL_SetWindowSize(window, fb_w, fb_h);
+        glViewport(0, 0, fb_w, fb_h);
         glUniform2f(
             uniform_resolution, (float)cur_wnd_width, (float)cur_wnd_height);
+        if (!fb[0]) {
+            glGenTextures(LEN(fbtex), fbtex);
+            glGenFramebuffers(LEN(fb), fb);
+            for (int i = 0; i < LEN(fbtex); i++) {
+                glBindFramebuffer(GL_FRAMEBUFFER, fb[i]);
+                glBindTexture(GL_TEXTURE_2D, fbtex[i]);
+                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, fb_w, fb_h, 0, GL_RGBA,
+                             GL_UNSIGNED_BYTE, NULL);
+                glTexParameteri(
+                    GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+                glTexParameteri(
+                    GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+                glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+                                       GL_TEXTURE_2D, fbtex[i], 0);
+                if (glCheckFramebufferStatus(GL_FRAMEBUFFER) !=
+                    GL_FRAMEBUFFER_COMPLETE) {
+                    ERRORF("unable to create framebuffer");
+                }
+            }
+        } else {
+            for (int i = 0; i < LEN(fbtex); i++) {
+                glBindTexture(GL_TEXTURE_2D, fbtex[i]);
+                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, fb_w, fb_h, 0, GL_RGBA,
+                             GL_UNSIGNED_BYTE, NULL);
+            }
+        }
+        glBindFramebuffer(GL_FRAMEBUFFER, fb[fb_index]);
     }
     if (!is_window_visible) {
         SDL_ShowWindow(window);
@@ -454,13 +492,27 @@ static void ApplyDisplayPendingChanges() {
     }
 }
 
+static bool IsInRect(unsigned int x, unsigned int y, RECT* rect) {
+    return x >= rect->x && x < rect->x + rect->w &&
+           y >= rect->y && y < rect->y + rect->h;
+}
+static int GuessFrameBuffer(unsigned int x, unsigned int y) {
+    if (IsInRect(x, y, &fbrect[0])) {
+        return 0;
+    }
+    if (IsInRect(x, y, &fbrect[1])) {
+        return 1;
+    }
+    return -1;
+}
+
 void Draw_Reset() { NOT_IMPLEMENTED; }
 
 void Draw_DisplayEnable(unsigned int on) {
     disp_on = on;
     if (!on) {
         // TODO unbind the frame buffer and display a black screen
-        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+        glBindFramebuffer(GL_FRAMEBUFFER, fb[fb_index]);
         glClearColor(0, 0, 0, 1);
         glClear(GL_COLOR_BUFFER_BIT);
     } else {
@@ -469,9 +521,22 @@ void Draw_DisplayEnable(unsigned int on) {
 }
 
 void Draw_DisplayArea(unsigned int x, unsigned int y) {
-    NOT_IMPLEMENTED;
-    ApplyDisplayPendingChanges();
-    SDL_GL_SwapWindow(window);
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, fb[fb_index]);
+    glBlitFramebuffer(
+        0, 0, fb_w, fb_h, 0, 0, fb_w, fb_h, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+
+    // TODO dirty hack where the frame buffer is decided based on X and Y
+    int fbidx = x == 0 && y == 0 ? 0 : 1;
+    fbrect[fbidx].x = (short)x;
+    fbrect[fbidx].y = (short)y;
+    fbrect[fbidx].w = (short)cur_wnd_width;
+    fbrect[fbidx].h = (short)cur_wnd_height;
+    if (fb_index != fbidx) {
+        SDL_GL_SwapWindow(window);
+        fb_index = fbidx;
+    }
+    glBindFramebuffer(GL_FRAMEBUFFER, fb[fb_index]);
 }
 
 void Draw_DisplayHorizontalRange(unsigned int start, unsigned int end) {
@@ -839,11 +904,17 @@ static bool DoRectTouch(RECT* r1, RECT* r2) {
              r1->y + r1->h <= r2->y || r2->y + r2->h <= r1->y);
 }
 void Draw_ClearImage(RECT* rect, u_char r, u_char g, u_char b) {
-    // TODO need support for scissor, otherwise screen will flicker
-    if (rect->x == 0) { // hack because we do not know what FB to clear
-        glClearColor(
-            (float)r / 255.f, (float)g / 255.f, (float)b / 255.f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
+    int fbidx = GuessFrameBuffer(rect->x, rect->y);
+    if (fbidx >= 0) {
+        fbidx = !fbidx; // TODO hack to avoid screen flickering
+        glClearColor((float)r / 255.f, (float)g / 255.f, (float)b / 255.f, 1.0f);
+        if (fbidx == fb_index) {
+            glClear(GL_COLOR_BUFFER_BIT);
+        } else {
+            glBindFramebuffer(GL_FRAMEBUFFER, fb[fbidx]);
+            glClear(GL_COLOR_BUFFER_BIT);
+            glBindFramebuffer(GL_FRAMEBUFFER, fb[fb_index]);
+        }
     }
 
     RECT fixedRect;
