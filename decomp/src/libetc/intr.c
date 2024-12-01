@@ -1,27 +1,83 @@
 #include <common.h>
 #include <libetc.h>
+#include <setjmp.h>
 
-INCLUDE_ASM("asm/nonmatchings/libetc/intr", ResetCallback);
+struct intr {
+    const char* ver;
+    void (*cb)();
+    void (*set)();
+    void (*start)();
+    void (*stop)();
+    int (*unk14)(int, void (*f)());
+    void (*restart)();
+    short* unk1C;
+};
 
-INCLUDE_ASM("asm/nonmatchings/libetc/intr", InterruptCallback);
+struct Intr {
+    u16 unk0;
+    u16 isCbContext;
+    s16 D_800B5FFC[24];
+    s32 D_800B602C;
+    jmp_buf env;
+    s32 stack[0x400];
+}; // size=0x1068
 
-INCLUDE_ASM("asm/nonmatchings/libetc/intr", DMACallback);
+extern char D_800B5FA0[];
+extern struct Intr D_800B5FF8;
+extern struct intr* D_800B7080;
+volatile extern u16* D_800B7084;
+volatile extern u16* D_800B7088;
+volatile extern s32* D_800B708C;
 
-INCLUDE_ASM("asm/nonmatchings/libetc/intr", VSyncCallback);
+void HookEntryInt(jmp_buf env);
+long long startIntrDMA(); // TODO fix return type
+void* startIntrVSync();
+void trapIntr();
+static void memclr(s32* mem, int len);
 
-INCLUDE_ASM("asm/nonmatchings/libetc/intr", VSyncCallbacks);
+void ResetCallback(void) { D_800B7080->start(); }
 
-INCLUDE_ASM("asm/nonmatchings/libetc/intr", StopCallback);
+void InterruptCallback(void) { D_800B7080->set(); }
 
-INCLUDE_ASM("asm/nonmatchings/libetc/intr", RestartCallback);
+void DMACallback(void) { D_800B7080->cb(); }
 
-INCLUDE_ASM("asm/nonmatchings/libetc/intr", CheckCallback);
+void VSyncCallback(void (*func)()) { D_800B7080->unk14(4, func); }
 
-INCLUDE_ASM("asm/nonmatchings/libetc/intr", GetIntrMask);
+void VSyncCallbacks(int n, void (*func)()) { D_800B7080->unk14(n, func); }
 
-INCLUDE_ASM("asm/nonmatchings/libetc/intr", SetIntrMask);
+void StopCallback(void) { D_800B7080->stop(); }
 
-INCLUDE_ASM("asm/nonmatchings/libetc/intr", startIntr);
+void RestartCallback(void) { D_800B7080->restart(); }
+
+int CheckCallback() { return D_800B5FF8.isCbContext; }
+
+int GetIntrMask() { return *D_800B7088; }
+
+int SetIntrMask(int mask) {
+    int prev = *D_800B7088;
+    *D_800B7088 = mask;
+    return prev;
+}
+
+void* startIntr(void) {
+    if (D_800B5FF8.unk0) {
+        return NULL;
+    }
+    *D_800B7084 = *D_800B7088 = 0;
+    *D_800B708C = 0x33333333;
+    memclr(&D_800B5FF8, sizeof(D_800B5FF8) / sizeof(s32));
+    if (setjmp(D_800B5FF8.env)) {
+        trapIntr();
+    }
+    D_800B5FF8.env[JB_SP] = &D_800B5FF8.stack[0x3EC];
+    HookEntryInt(D_800B5FF8.env);
+    D_800B5FF8.unk0 = 1;
+    D_800B7080->unk14 = startIntrVSync();
+    D_800B7080->cb = startIntrDMA();
+    _96_remove();
+    ExitCriticalSection();
+    return &D_800B5FF8.unk0;
+}
 
 const char D_800B2D70[] = "$Id: intr.c,v 1.76 1997/02/12 12:45:05 makoto Exp $";
 
@@ -29,8 +85,37 @@ WEAK_INCLUDE_ASM("asm/nonmatchings/libetc/intr", trapIntr);
 
 INCLUDE_ASM("asm/nonmatchings/libetc/intr", setIntr);
 
-INCLUDE_ASM("asm/nonmatchings/libetc/intr", stopIntr);
+u16* stopIntr(void) {
+    if (D_800B5FF8.unk0) {
+        EnterCriticalSection();
+        D_800B5FF8.D_800B5FFC[0x17] = *D_800B7088;
+        D_800B5FF8.D_800B602C = *D_800B708C;
+        *D_800B7084 = *D_800B7088 = 0;
+        *D_800B708C &= 0x77777777;
+        ResetEntryInt();
+        if (D_800B708C && D_800B708C) { // FAKE
+        }
+        D_800B5FF8.unk0 = 0;
+        return &D_800B5FF8.unk0;
+    }
+    return NULL;
+}
 
-INCLUDE_ASM("asm/nonmatchings/libetc/intr", restartIntr);
+u16* restartIntr(void) {
+    if (D_800B5FF8.unk0) {
+        return NULL;
+    }
+    HookEntryInt(D_800B5FF8.env);
+    D_800B5FF8.unk0 = 1;
+    *D_800B7088 = D_800B5FF8.D_800B5FFC[0x17];
+    *D_800B708C = D_800B5FF8.D_800B602C;
+    ExitCriticalSection();
+    return &D_800B5FF8.unk0;
+}
 
-WEAK_INCLUDE_ASM("asm/nonmatchings/libetc/intr", memclr);
+static void memclr(s32* mem, int len) {
+    int i;
+    for (i = len - 1; i != -1; i--) {
+        *mem++ = 0;
+    }
+}
