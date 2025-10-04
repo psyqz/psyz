@@ -222,6 +222,7 @@ bool InitPlatform() {
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
     SDL_GL_SetAttribute(
         SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+    SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 0);
     cur_wnd_height = DISP_HEIGHT;
     window = SDL_CreateWindow(
         "PSY-Z", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
@@ -238,7 +239,6 @@ bool InitPlatform() {
         return false;
     }
     SDL_GL_MakeCurrent(window, glContext);
-    SDL_GL_SetSwapInterval(1);
     glLineWidth(SCREEN_SCALE);
     INFOF("opengl %s initialized", glGetString(GL_VERSION));
 
@@ -322,6 +322,14 @@ static void UploadTextures() {
                     GL_UNSIGNED_SHORT_1_5_5_5_REV, g_RawVram);
 }
 
+static void PresentBufferToScreen() {
+    glFlush();
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, fb[fb_index]);
+    glBlitFramebuffer(
+        0, 0, fb_w, fb_h, 0, 0, fb_w, fb_h, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+}
+
 void ResetPlatform(void) {
     cur_tpage = 0;
     if (shader_program) {
@@ -358,6 +366,7 @@ int PlatformVSync(int mode) {
         ret = (unsigned short)(cur - elapsed_from_beginning);
     }
     last_vsync = cur;
+    PresentBufferToScreen();
     return ret;
 }
 
@@ -521,11 +530,7 @@ void Draw_DisplayEnable(unsigned int on) {
 }
 
 void Draw_DisplayArea(unsigned int x, unsigned int y) {
-    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
-    glBindFramebuffer(GL_READ_FRAMEBUFFER, fb[fb_index]);
-    glBlitFramebuffer(
-        0, 0, fb_w, fb_h, 0, 0, fb_w, fb_h, GL_COLOR_BUFFER_BIT, GL_NEAREST);
-
+    PresentBufferToScreen();
     // TODO dirty hack where the frame buffer is decided based on X and Y
     int fbidx = x == 0 && y == 0 ? 0 : 1;
     fbrect[fbidx].x = (short)x;
@@ -533,9 +538,10 @@ void Draw_DisplayArea(unsigned int x, unsigned int y) {
     fbrect[fbidx].w = (short)cur_wnd_width;
     fbrect[fbidx].h = (short)cur_wnd_height;
     if (fb_index != fbidx) {
-        SDL_GL_SwapWindow(window);
         fb_index = fbidx;
+        // SDL_GL_SwapWindow(window);
     }
+    glFlush();
     glBindFramebuffer(GL_FRAMEBUFFER, fb[fb_index]);
 }
 
@@ -579,6 +585,7 @@ void Draw_SetDisplayMode(DisplayMode* mode) {
 
 int Draw_Sync(int mode) {
     PollEvents();
+    glFlush();
     return 0;
 }
 
