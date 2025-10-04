@@ -1,7 +1,7 @@
 splat64==0.24.6
 PyYAML
-spimdisasm>=1.26.0
-rabbitizer>=1.11.0
+spimdisasm==1.26.0
+rabbitizer==1.11.0
 pygfxd
 n64img>=0.1.4
 crunch64>=0.2.0
