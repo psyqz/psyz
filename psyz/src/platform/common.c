@@ -11,8 +11,15 @@ int PlatformVSync(int mode);
 int MyVSync(int mode) {
     // TODO the implementation is most likely incorrect
     int elapsed = (unsigned short)PlatformVSync(mode);
+    if (mode < 0) {
+        // TODO return vsync, not elapsed
+        return elapsed;
+    }
+    if (mode == 1) {
+        return elapsed;
+    }
     if (g_VsyncCallback) {
-        //g_VsyncCallback();
+        g_VsyncCallback();
     }
     return elapsed;
 }
