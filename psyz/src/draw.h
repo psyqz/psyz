@@ -66,7 +66,8 @@ void Draw_DisplayVerticalRange(unsigned int start, int unsigned end);
 void Draw_SetDisplayMode(DisplayMode* mode);
 
 void Draw_SetTexpageMode(ParamDrawTexpageMode* p);
-void Draw_SetTextureWindow(int mask_x, int mask_y, int off_x, int off_y);
+void Draw_SetTextureWindow(unsigned int mask_x, unsigned int mask_y,
+                           unsigned int off_x, unsigned int off_y);
 void Draw_SetAreaStart(int x, int y);
 void Draw_SetAreaEnd(int x, int y);
 void Draw_SetOffset(int x, int y);

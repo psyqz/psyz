@@ -68,8 +68,10 @@ static int GPU_Sync(int mode) {
             Draw_SetTexpageMode((ParamDrawTexpageMode*)&op);
             break;
         case 0xE2:
-            INFOF("TODO Draw_SetTextureWindow params");
-            Draw_SetTextureWindow(0, 0, 0, 0);
+            // https://psx-spx.consoledev.net/graphicsprocessingunitgpu/#gp0e2h-texture-window-setting
+            Draw_SetTextureWindow(
+                (op & 0x1F) * 8 - 1, ((op >> 5) & 0x1F) * 8 - 1,
+                ((op >> 10) & 0x1F) * 8, ((op >> 15) & 0x1F) * 8);
             break;
         case 0xE3:
             Draw_SetAreaStart((int)op & 0x3FF, (int)(op >> 10) & 0x3FF);

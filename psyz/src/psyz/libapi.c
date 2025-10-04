@@ -1,6 +1,7 @@
 #include <psyz.h>
 #include <log.h>
 #include <kernel.h>
+#include "../draw.h"
 
 int MyVSync(int mode);
 int VSync(int mode) { return MyVSync(mode); }
@@ -50,9 +51,9 @@ long OpenEvent(unsigned long desc, long spec, long mode, long (*func)()) {
         case EvSpIOE: // always report memory card as connected
             e->status = 1;
             break;
-        case EvSpERROR: // never errors
+        case EvSpERROR:  // never errors
         case EvSpTIMOUT: // never report memory card as disconnected
-        case EvSpNEW: // never block writing after connection
+        case EvSpNEW:    // never block writing after connection
             e->status = 0;
             break;
         default:
@@ -65,9 +66,9 @@ long OpenEvent(unsigned long desc, long spec, long mode, long (*func)()) {
         case EvSpIOE: // always report end of IO
             e->status = 1;
             break;
-        case EvSpERROR: // never errors
+        case EvSpERROR:  // never errors
         case EvSpTIMOUT: // never timeout
-        case EvSpNEW: // never report a new memory card
+        case EvSpNEW:    // never report a new memory card
             e->status = 0;
             break;
         default:
@@ -145,6 +146,4 @@ long my_erase(char* path);
 long erase(char* path) { return my_erase(path); }
 
 long my_format(char* fs);
-long format(char* fs) {
-    return my_format(fs);
-}
+long format(char* fs) { return my_format(fs); }

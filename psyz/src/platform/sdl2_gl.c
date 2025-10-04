@@ -493,8 +493,8 @@ static void ApplyDisplayPendingChanges() {
 }
 
 static bool IsInRect(unsigned int x, unsigned int y, RECT* rect) {
-    return x >= rect->x && x < rect->x + rect->w &&
-           y >= rect->y && y < rect->y + rect->h;
+    return x >= rect->x && x < rect->x + rect->w && y >= rect->y &&
+           y < rect->y + rect->h;
 }
 static int GuessFrameBuffer(unsigned int x, unsigned int y) {
     if (IsInRect(x, y, &fbrect[0])) {
@@ -882,7 +882,8 @@ void Draw_SetTexpageMode(ParamDrawTexpageMode* p) {
     cur_tpage = *(u_short*)p & 0xFF; // TODO
     NOT_IMPLEMENTED;
 }
-void Draw_SetTextureWindow(int mask_x, int mask_y, int off_x, int off_y) {
+void Draw_SetTextureWindow(unsigned int mask_x, unsigned int mask_y,
+                           unsigned int off_x, unsigned int off_y) {
     // implements SetTexWindow
     // it seems it is some kind of texture clamp/repeat
     NOT_IMPLEMENTED;
@@ -907,7 +908,8 @@ void Draw_ClearImage(RECT* rect, u_char r, u_char g, u_char b) {
     int fbidx = GuessFrameBuffer(rect->x, rect->y);
     if (fbidx >= 0) {
         fbidx = !fbidx; // TODO hack to avoid screen flickering
-        glClearColor((float)r / 255.f, (float)g / 255.f, (float)b / 255.f, 1.0f);
+        glClearColor(
+            (float)r / 255.f, (float)g / 255.f, (float)b / 255.f, 1.0f);
         if (fbidx == fb_index) {
             glClear(GL_COLOR_BUFFER_BIT);
         } else {
@@ -936,7 +938,6 @@ void Draw_LoadImage(RECT* rect, u_long* p) {
     ushort* mem = (ushort*)p;
     ushort* vram = g_RawVram;
     vram += rect->x + rect->y * VRAM_W;
-
     for (int i = 0; i < rect->h; i++) {
         memcpy(vram, mem, rect->w * sizeof(ushort));
         mem += rect->w;
