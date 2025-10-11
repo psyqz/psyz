@@ -210,9 +210,9 @@ static int cur_disp_horiz = -1;
 static int cur_disp_vert = -1;
 static int fb_w = 0, fb_h = 0;
 
-void ResetPlatform(void);
+static void QuitPlatform(void);
 bool InitPlatform() {
-    atexit(ResetPlatform);
+    atexit(QuitPlatform);
 
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) {
         ERRORF("SDL_Init: %s", SDL_GetError());
@@ -330,6 +330,18 @@ static void PresentBufferToScreen() {
         0, 0, fb_w, fb_h, 0, 0, fb_w, fb_h, GL_COLOR_BUFFER_BIT, GL_NEAREST);
 }
 
+static void QuitPlatform() {
+    if (glContext) {
+        SDL_GL_DestroyContext(glContext);
+        glContext = NULL;
+    }
+    if (window) {
+        SDL_DestroyWindow(window);
+        window = NULL;
+    }
+    SDL_Quit();
+}
+
 void ResetPlatform(void) {
     cur_tpage = 0;
     if (shader_program) {
@@ -345,15 +357,7 @@ void ResetPlatform(void) {
         memset(fb, 0, LEN(fb));
         memset(fbtex, 0, LEN(fbtex));
     }
-    if (glContext) {
-        SDL_GL_DestroyContext(glContext);
-        glContext = NULL;
-    }
-    if (window) {
-        SDL_DestroyWindow(window);
-        window = NULL;
-    }
-    SDL_Quit();
+    QuitPlatform();
 }
 
 int PlatformVSync(int mode) {
