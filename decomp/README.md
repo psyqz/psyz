@@ -34,3 +34,7 @@ Whenever possible, decompiled code from this repository will be upstreamed to [S
 ## Contributing
 
 Contributions are welcome! Please ensure that any code you submit matches the generated ELF binaries. When contributing, adhere to the guidelines provided in the sotn-decomp decompilation rules.
+
+## Special thanks
+
+Most of the decomp was ported from the incredible work of contributors from the [SOTN Decomp repo](https://github.com/Xeeynamo/sotn-decomp/tree/master/src/main/psxsdk).
