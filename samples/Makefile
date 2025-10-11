@@ -19,7 +19,7 @@ clean_psx:
 .PHONY: build_pc
 build_pc:
 	for dir in $(TARGETS); do \
-		cd "$$dir" && cmake -GNinja -B build/  && cmake --build build/ && cd ..; \
+		cd "$$dir" && cmake -GNinja -DSDL_STATIC=ON -B build/  && cmake --build build/ && cd ..; \
 	done
 
 clean_pc:
