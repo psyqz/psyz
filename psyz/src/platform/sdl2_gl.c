@@ -531,15 +531,19 @@ void Draw_DisplayEnable(unsigned int on) {
 
 void Draw_DisplayArea(unsigned int x, unsigned int y) {
     PresentBufferToScreen();
-    // TODO dirty hack where the frame buffer is decided based on X and Y
-    int fbidx = x == 0 && y == 0 ? 0 : 1;
+    // TODO dirty hack where the frame buffer gets always flipped regardless
+    // of x and y being different. Maybe a future idea would be to have a
+    // fbidx_prev, so if the actual fbidx doesn't change between frames, we
+    // still force a SDL_GL_SwapWindow
+    static int fbidx = 1;
+    fbidx ^= 1;
     fbrect[fbidx].x = (short)x;
     fbrect[fbidx].y = (short)y;
     fbrect[fbidx].w = (short)cur_wnd_width;
     fbrect[fbidx].h = (short)cur_wnd_height;
     if (fb_index != fbidx) {
         fb_index = fbidx;
-        // SDL_GL_SwapWindow(window);
+        SDL_GL_SwapWindow(window);
     }
     glFlush();
     glBindFramebuffer(GL_FRAMEBUFFER, fb[fb_index]);
