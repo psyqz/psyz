@@ -1,17 +1,18 @@
 #include "psyz.h"
 #include <assert.h>
 #include <stdlib.h>
+#include <stddef.h>
 #include "libgpu.h"
 #ifdef _MSC_VER
 #include <SDL.h>
 #else
-#include <SDL2/SDL.h>
+#include <SDL3/SDL.h>
 #endif
 #include <libetc.h>
 #include <libgte.h>
 #include <libgpu.h>
 #include "../draw.h"
-#include <SDL2/SDL_opengl.h>
+#include <SDL3/SDL_opengl.h>
 #include <GLES3/gl3.h>
 
 static const char gl33_vertex_shader[] = {
@@ -146,7 +147,7 @@ static GLint uniform_tex_8bpp = 0;
 static GLint uniform_tex_16bpp = 0;
 static GLuint vram_textures[Num_Tex];
 static bool is_vram_texture_invalid = false;
-static SDL_AudioSpec audio_specs = {0};
+static SDL_AudioStream* audio_stream = NULL;
 static SDL_AudioDeviceID audio_device_id = {0};
 static GLrecti scissor = {0};
 
@@ -225,8 +226,7 @@ bool InitPlatform() {
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 0);
     cur_wnd_height = DISP_HEIGHT;
     window = SDL_CreateWindow(
-        "PSY-Z", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
-        DISP_WIDTH * SCREEN_SCALE, DISP_HEIGHT * SCREEN_SCALE,
+        "PSY-Z", DISP_WIDTH * SCREEN_SCALE, DISP_HEIGHT * SCREEN_SCALE,
         SDL_WINDOW_OPENGL | SDL_WINDOW_HIDDEN);
     if (!window) {
         ERRORF("SDL_CreateWindow: %s", SDL_GetError());
@@ -346,7 +346,7 @@ void ResetPlatform(void) {
         memset(fbtex, 0, LEN(fbtex));
     }
     if (glContext) {
-        SDL_GL_DeleteContext(glContext);
+        SDL_GL_DestroyContext(glContext);
         glContext = NULL;
     }
     if (window) {
@@ -370,36 +370,32 @@ int PlatformVSync(int mode) {
     return ret;
 }
 
-void SDLAudioCallback(void* data, Uint8* buffer, int length) {
+void SDLAudioCallback(void *userdata, SDL_AudioStream *stream, int additional_amount, int total_amount) {
     NOT_IMPLEMENTED;
 }
 
 void MySsInitHot(void) {
     SDL_AudioSpec specs = {0};
     specs.freq = 44100;
-    specs.format = AUDIO_S16;
+    specs.format = SDL_AUDIO_S16;
     specs.channels = 2;
-    specs.samples = 2048;
-    specs.callback = SDLAudioCallback;
-
-    audio_device_id =
-        SDL_OpenAudioDevice(NULL, false, &specs, &audio_specs, false);
-    if (audio_device_id == 0) {
+    audio_stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &specs, SDLAudioCallback, NULL);
+    if (!audio_stream) {
         WARNF("SDL_OpenAudioDevice failed: %s", SDL_GetError());
         return;
     }
-    INFOF("SDL audio device opened: %d", audio_device_id);
-    SDL_PauseAudioDevice(audio_device_id, 0);
+    INFOF("SDL audio device stream opened");
+    SDL_PauseAudioStreamDevice(audio_stream);
 }
 
 static void PollEvents(void) {
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
         switch (event.type) {
-        case SDL_QUIT:
+        case SDL_EVENT_QUIT:
             exit(0);
-        case SDL_KEYDOWN:
-            if (event.key.keysym.scancode == SDL_SCANCODE_ESCAPE) {
+        case SDL_EVENT_KEY_DOWN:
+            if (event.key.scancode == SDL_SCANCODE_ESCAPE) {
                 exit(0);
             }
             break;
@@ -428,12 +424,15 @@ static u_long keyb_p1[] = {
     SDL_SCANCODE_LEFT,      // PAD_LEFT
 };
 u_long MyPadRead(int id) {
+    const bool* keyb;
+    int numkeys;
     PollEvents();
-    const u8* keyb = SDL_GetKeyboardState(NULL);
+    keyb = SDL_GetKeyboardState(&numkeys);
     u_long pressed = 0;
 
     if (id == 0) {
-        for (int i = 0; i < LEN(keyb_p1); i++) {
+        const int to_read = LEN(keyb_p1) < numkeys ? LEN(keyb_p1) : numkeys;
+        for (int i = 0; i < to_read; i++) {
             if (keyb[keyb_p1[i]]) {
                 pressed |= 1 << i;
             }

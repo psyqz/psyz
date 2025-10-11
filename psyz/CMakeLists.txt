@@ -5,7 +5,13 @@ project(psyz)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_package(SDL2 REQUIRED)
+add_subdirectory(
+        ${CMAKE_CURRENT_SOURCE_DIR}/../external/SDL
+        ${CMAKE_CURRENT_BINARY_DIR}/sdl
+        EXCLUDE_FROM_ALL)
+set(SDL_SHARED OFF CACHE BOOL "" FORCE)
+set(SDL_STATIC ON CACHE BOOL "" FORCE)
+set(SDL_TEST OFF CACHE BOOL "" FORCE)
 
 add_library(psyz STATIC
     src/platform/log.c
@@ -34,4 +40,4 @@ add_library(psyz STATIC
 )
 target_compile_definitions(psyz PUBLIC __psyz)
 target_include_directories(psyz PUBLIC include)
-target_link_libraries(psyz PUBLIC SDL2::SDL2 -lGL)
+target_link_libraries(psyz PUBLIC SDL3::SDL3-static -lGL)
