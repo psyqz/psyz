@@ -12,6 +12,7 @@ u16 tpage;
 u16 clut;
 u_char ctlbuf[0x100];
 u_char _que[0x1800];
+u32 D_800E8640[0x10];
 
 typedef enum {
     // https://psx-spx.consoledev.net/graphicsprocessingunitgpu/#gpu-versions
@@ -210,12 +211,15 @@ static u_long psyz_status(void) {
     NOT_IMPLEMENTED;
     return 0;
 }
-static int psyz_sync(int) {
-    NOT_IMPLEMENTED;
+static int psyz_sync(int mode) {
+    // see decomp/src/libgpu/sys.c
+    // mode 0 waits until all the queue is drawn on screen
+    // mode 1 process the queue and return how many elements have been queued
+    // return -1 if GPU has timed out
+    // but on PC the implementation is much simpler as it's always synced
+    psyz_exeque();
     return 0;
 }
-
-u_long get_dx(DISPENV* env) { return env->disp.x; }
 
 int psyz_gpu_version(int mode) { return GPU_V0; }
 
@@ -241,9 +245,5 @@ void GPU_cw(u_long* param) {
 
 // these are not yet decompiled
 int _addque2() { return 0; }
-int _clr() { return 0; }
-int _drs() { return 0; }
-int _dws() { return 0; }
 int _exeque() { return 0; }
-void _otc(OT_TYPE* ot, s32 n) {}
-int _sync(int) {}
+int get_alarm(void) { return 0; }

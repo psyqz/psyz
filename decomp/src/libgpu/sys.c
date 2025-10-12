@@ -10,12 +10,12 @@ struct Gpu {
     /* 0x0C */ int (*clr)();
     /* 0x10 */ void (*ctl)(unsigned int);
     /* 0x14 */ int (*cwb)(u32* data, s32 n);
-    /* 0x18 */ void (*cwc)();
+    /* 0x18 */ void (*cwc)(u_long* packets);
     /* 0x1C */ int (*drs)();
     /* 0x20 */ int (*dws)();
     /* 0x24 */ int (*exeque)();
     /* 0x28 */ int (*getctl)(int);
-    /* 0x2C */ void (*otc)(OT_TYPE* ot, s32 n);
+    /* 0x2C */ int (*otc)(OT_TYPE* ot, s32 n);
     /* 0x30 */ int (*param)(int);
     /* 0x34 */ int (*reset)(int);
     /* 0x38 */ u_long (*status)(void);
@@ -51,12 +51,12 @@ int _addque2();
 int _clr();
 void _ctl(unsigned int);
 int _cwb(u32* data, s32 n);
-void _cwc();
+void _cwc(u_long* packets);
 int _drs();
 int _dws();
 int _exeque();
 int _getctl(int);
-void _otc(OT_TYPE* ot, s32 n);
+int _otc(OT_TYPE* ot, s32 n);
 int _param(int);
 int _reset(int);
 u_long _status(void);
@@ -98,15 +98,15 @@ int D_800B89A8[] = {1024, 1024, 1024, 1024, 1024};
 int D_800B89BC[] = {512, 1024, 1024, 512, 1024};
 u_long move_image[] = {(4 << 24) | 0xFFFFFF, 0x80000000, 0, 0, 0};
 u_long D_800B89E4[] = {(4 << 24) | 0xFFFFFF, 0, 0, 0, 0};
-volatile u_long* D_800B89F8 = (u_long*)0x1F801810;
-volatile u_long* D_800B89FC = (u_long*)0x1F801814; // stat
-volatile u_long* D_800B8A00 = (u_long*)0x1F8010A0; // madr
-volatile u_long* D_800B8A04 = (u_long*)0x1F8010A4;
-volatile u_long* D_800B8A08 = (u_long*)0x1F8010A8; // chcr
-volatile u_long* D_800B8A0C = (u_long*)0x1F8010E0;
-volatile u_long* D_800B8A10 = (u_long*)0x1F8010E4;
-volatile u_long* D_800B8A14 = (u_long*)0x1F8010E8;
-volatile u_long* D_800B8A18 = (u_long*)0x1F8010F0;
+volatile u_long* GPU_DATA = (u_long*)0x1F801810;
+volatile u_long* GPU_STATUS = (u_long*)0x1F801814; // stat
+volatile u_long** DMA2_MADR = (volatile u_long**)0x1F8010A0;  // madr
+volatile u_long* DMA2_BCR = (u_long*)0x1F8010A4;
+volatile u_long* DMA2_CHCR = (u_long*)0x1F8010A8; // chcr
+volatile OT_TYPE** DMA6_MADR = (volatile OT_TYPE**)0x1F8010E0;
+volatile u_long* DMA6_BCR = (u_long*)0x1F8010E4;
+volatile u_long* DMA6_CHCR = (u_long*)0x1F8010E8;
+volatile u_long* DPCR = (u_long*)0x1F8010F0;
 u_long* _qlog = NULL;
 int D_800B8A20 = 0;
 int D_800B8A24 = 0;
@@ -128,6 +128,22 @@ extern u_char _que[0x1800];
 #define GPU_PSX_PTR(x) (u_long*)((u_long)x & 0xFFFFFF)
 #define TERM_PRIM(ot, p) *ot = (u_long)p & 0xFFFFFF
 #endif
+
+#ifndef CLAMP
+#define CLAMP(value, low, high)                                                \
+    value < low ? low : (value > high ? high : value)
+#endif
+
+// gpu commands
+#define CMD_CLEAR_CACHE 0x01000000
+#define CMD_FILL_RECTANGLE_IN_VRAM(color) ((color & 0xFFFFFF) | 0x02000000)
+#define CMD_MONOCHROME_RECTANGLE(color) ((color & 0xFFFFFF) | 0x60000000)
+#define CMD_COPY_VRAM_TO_CPU 0xC0000000
+#define CMD_COPY_CPU_TO_VRAM 0xA0000000
+
+// status reg bits
+#define STATUS_READY_TO_RECEIVE_CMD (1 << 26)
+#define STATUS_READY_TO_SEND_VRAM_TO_CPU (1 << 27)
 
 void GPU_cw(u_long*);
 int ResetGraph(int mode) {
@@ -615,21 +631,164 @@ u_long get_tw(RECT* rect) {
     return 0;
 }
 
-u_long get_dx(DISPENV* env);
-INCLUDE_ASM("asm/nonmatchings/libgpu/sys", get_dx);
+u_long get_dx(DISPENV* env) {
+    switch (info.version) {
+    case 1:
+        return info.reverse ? 0x400 - env->disp.x - env->disp.w : env->disp.x;
+    case 2:
+        return info.reverse ? 0x400 - env->disp.x - (env->disp.w / 2)
+                            : env->disp.x / 2;
+    default:
+        return env->disp.x;
+    }
+}
 
-u_long _status(void) { return *D_800B89FC; }
+u_long _status(void) { return *GPU_STATUS; }
 
-INCLUDE_ASM("asm/nonmatchings/libgpu/sys", _otc);
+int get_alarm(void);
+void set_alarm(void);
+int _otc(OT_TYPE* ot, int n) {
+    *DPCR |= 0x08000000;
+    *DMA6_CHCR = 0;
+    *DMA6_MADR = ot - 1 + n;
+    *DMA6_BCR = n;
+    *DMA6_CHCR = 0x11000002;
+    set_alarm();
+    while (*DMA6_CHCR & 0x01000000) {
+        if (get_alarm()) {
+            return -1;
+        }
+    }
+    return n;
+}
 
-INCLUDE_ASM("asm/nonmatchings/libgpu/sys", _clr);
+extern u32 D_800E8640[0x10];
+int _clr(RECT* rect, u32 color) {
+    u_long ptr;
 
-INCLUDE_ASM("asm/nonmatchings/libgpu/sys", _dws);
+    rect->w = CLAMP(rect->w, 0, info.w - 1);
+    rect->h = CLAMP(rect->h, 0, info.h - 1);
+    if (rect->x & 0x3F || rect->w & 0x3F) {
+        ptr = (u_long)&D_800E8640[9];
+        D_800E8640[0] = (ptr & 0xFFFFFF) | 0x08000000; // set up otag
+        D_800E8640[1] = 0xE3000000; // set drawing area top left
+        D_800E8640[2] = 0xE4FFFFFF; // set drawing area bottom right
+        D_800E8640[3] = 0xE5000000; // set drawing offset
+        D_800E8640[4] = 0xE6000000;
+        D_800E8640[5] =
+            0xE1000000 | *GPU_STATUS & 0x7FF | (color >> 0x1F) << 10;
+        D_800E8640[6] = CMD_MONOCHROME_RECTANGLE(color);
+        D_800E8640[7] = *(s32*)&rect->x;
+        D_800E8640[8] = *(s32*)&rect->w;
+        D_800E8640[9] = 0x03FFFFFF;
+        D_800E8640[10] = _param(3) | 0xE3000000; // set drawing area top left
+        D_800E8640[11] =
+            _param(4) | 0xE4000000; // set drawing area bottom right
+        D_800E8640[12] = _param(5) | 0xE5000000; // set drawing offset
+    } else {
+        D_800E8640[0] = 0x05FFFFFF;
+        D_800E8640[1] = 0xE6000000; // mask bit setting
+        D_800E8640[2] =
+            0xE1000000 | *GPU_STATUS & 0x7FF | (color >> 0x1F) << 10;
+        D_800E8640[3] = CMD_FILL_RECTANGLE_IN_VRAM(color);
+        D_800E8640[4] = *(s32*)&rect->x;
+        D_800E8640[5] = *(s32*)&rect->w;
+    }
+    _cwc((u_long*)D_800E8640);
+    return 0;
+}
 
-INCLUDE_ASM("asm/nonmatchings/libgpu/sys", _drs);
+// data write (aka LoadImage)
+int _dws(RECT* rect, u_long* data) {
+    int to_write;
+    int size;
+    int var_s0;
+    int var_s4;
+
+    var_s4 = 0;
+    set_alarm();
+    rect->w = CLAMP(rect->w, 0, info.w);
+    rect->h = CLAMP(rect->h, 0, info.h);
+    to_write = (rect->w * rect->h + 1) / 2;
+    if (to_write <= 0) {
+        return -1;
+    }
+    var_s0 = to_write % 16;
+    size = to_write / 16;
+    while (!(*GPU_STATUS & STATUS_READY_TO_RECEIVE_CMD)) {
+        if (get_alarm()) {
+            return -1;
+        }
+    }
+
+    *GPU_STATUS = STATUS_READY_TO_RECEIVE_CMD;
+    *GPU_DATA = CMD_CLEAR_CACHE;
+    *GPU_DATA = var_s4 ? 0xB0000000 : CMD_COPY_CPU_TO_VRAM;
+    *GPU_DATA = *(s32*)&rect->x;
+    *GPU_DATA = *(s32*)&rect->w;
+
+    while (var_s0--) {
+        *GPU_DATA = *data++;
+    }
+    if (size) {
+        *GPU_STATUS = 0x04000002;
+        *DMA2_MADR = data;
+        *DMA2_BCR = size << 16 | 0x10;
+        *DMA2_CHCR = 0x01000201;
+    }
+    return 0;
+}
+
+// data read (aka StoreImage)
+// Transfers image data from the frame buffer to main memory.
+int _drs(RECT* rect, u_long* data) {
+    int to_read;
+    int size;
+    int var_s0;
+
+    set_alarm();
+    rect->w = CLAMP(rect->w, 0, info.w);
+    rect->h = CLAMP(rect->h, 0, info.h);
+    to_read = (rect->w * rect->h + 1) / 2;
+    if (to_read <= 0) {
+        return -1;
+    }
+    var_s0 = to_read % 16;
+    size = to_read / 16;
+    while (!(*GPU_STATUS & STATUS_READY_TO_RECEIVE_CMD)) {
+        if (get_alarm()) {
+            return -1;
+        }
+    }
+
+    *GPU_STATUS = STATUS_READY_TO_RECEIVE_CMD;
+    *GPU_DATA = CMD_CLEAR_CACHE;
+    *GPU_DATA = CMD_COPY_VRAM_TO_CPU;
+    *GPU_DATA = *(s32*)&rect->x;
+    *GPU_DATA = *(s32*)&rect->w;
+
+    while (!(*GPU_STATUS & STATUS_READY_TO_SEND_VRAM_TO_CPU)) {
+        if (get_alarm()) {
+            return -1;
+        }
+    }
+
+    while (var_s0--) {
+        *data++ = *GPU_DATA;
+    }
+
+    if (size != 0) {
+        *GPU_STATUS = 0x04000003;
+        *DMA2_MADR = data;
+        *DMA2_BCR = (size << 0x10) | 0x10;
+        *DMA2_CHCR = 0x01000200;
+    }
+
+    return 0;
+}
 
 void _ctl(unsigned int status) {
-    *D_800B89FC = status;
+    *GPU_STATUS = status;
     ctlbuf[status >> 0x18] = status & 0xFFFFFF;
 }
 
@@ -638,23 +797,23 @@ int _getctl(int n) { return ctlbuf[n]; }
 int _cwb(u32* data, s32 n) {
     int i;
 
-    *D_800B89FC = 0x04000000;
+    *GPU_STATUS = 0x04000000;
     for (i = n - 1; i != -1; i--) {
-        *D_800B89F8 = *data++;
+        *GPU_DATA = *data++;
     }
     return 0;
 }
 
-void _cwc(s32 arg0) {
-    *D_800B89FC = 0x04000002;
-    *D_800B8A00 = arg0;
-    *D_800B8A04 = 0;
-    *D_800B8A08 = 0x01000401;
+void _cwc(u_long* packets) {
+    *GPU_STATUS = 0x04000002;
+    *DMA2_MADR = packets;
+    *DMA2_BCR = 0;
+    *DMA2_CHCR = 0x01000401;
 }
 
 int _param(int x) {
-    *D_800B89FC = x | 0x10000000;
-    return *D_800B89F8 & 0xFFFFFF;
+    *GPU_STATUS = x | 0x10000000;
+    return *GPU_DATA & 0xFFFFFF;
 }
 
 void _addque(int arg0, int arg1, int arg2) { _addque2(arg0, arg1, 0, arg2); }
@@ -677,9 +836,9 @@ int _reset(int mode) {
     case 0:
     case 5:
         // complete reset, re-initialize draw and disp environments
-        *D_800B8A08 = 0x401;
-        *D_800B8A18 |= 0x800;
-        *D_800B89FC = 0;
+        *DMA2_CHCR = 0x401;
+        *DPCR |= 0x800;
+        *GPU_STATUS = 0;
         memset(ctlbuf, 0, sizeof(ctlbuf));
         memset(_que, 0, sizeof(_que));
         break;
@@ -687,17 +846,45 @@ int _reset(int mode) {
     case 3:
         // cancels the current drawing and flushes the command buffer
         // preserves the current draw and disp environments
-        *D_800B8A08 = 0x401;
-        *D_800B8A18 |= 0x800;
-        *D_800B89FC = 0x02000000;
-        *D_800B89FC = 0x01000000;
+        *DMA2_CHCR = 0x401;
+        *DPCR |= 0x800;
+        *GPU_STATUS = 0x02000000;
+        *GPU_STATUS = 0x01000000;
         break;
     }
     SetIntrMask(D_800B8A3C);
     return !(mode & 7) ? _version(mode) : 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/libgpu/sys", _sync);
+int _sync(int mode) {
+    int queued;
+    if (mode == 0) {
+        set_alarm();
+        while (_qin != _qout) {
+            _exeque();
+            if (get_alarm()) {
+                return -1;
+            }
+        }
+        while (*DMA2_CHCR & 0x01000000 || !(*GPU_STATUS & 0x04000000)) {
+            if (get_alarm()) {
+                return -1;
+            }
+        }
+        return 0;
+    }
+    queued = ((u_long)_qin - (u_long)_qout) & 0x3F;
+    if (queued) {
+        _exeque();
+    }
+    if (*DMA2_CHCR & 0x01000000 || !(*GPU_STATUS & 0x04000000)) {
+        if (!queued) {
+            return 1;
+        }
+        return queued;
+    }
+    return queued;
+}
 
 void set_alarm(void) {
     D_800B8A40 = VSync(-1) + 0xF0;
@@ -707,22 +894,22 @@ void set_alarm(void) {
 INCLUDE_ASM("asm/nonmatchings/libgpu/sys", get_alarm);
 
 int _version(int mode) {
-    *D_800B89FC = 0x10000007;
-    if ((*D_800B89F8 & 0xFFFFFF) != 2) { // check for GPUv2
-        *D_800B89F8 = 0xE1001000 | (*D_800B89FC & 0x3FFF);
-        *D_800B89F8;
-        if (!(*D_800B89FC & 0x1000)) {
+    *GPU_STATUS = 0x10000007;
+    if ((*GPU_DATA & 0xFFFFFF) != 2) { // check for GPUv2
+        *GPU_DATA = 0xE1001000 | (*GPU_STATUS & 0x3FFF);
+        *GPU_DATA;
+        if (!(*GPU_STATUS & 0x1000)) {
             return 0;
         }
         if (!(mode & 8)) {
             return 1;
         }
-        *D_800B89FC = 0x20000504;
+        *GPU_STATUS = 0x20000504;
         return 2;
     } else if (!(mode & 8)) {
         return 3;
     } else {
-        *D_800B89FC = 0x09000001;
+        *GPU_STATUS = 0x09000001;
         return 4;
     }
 }
