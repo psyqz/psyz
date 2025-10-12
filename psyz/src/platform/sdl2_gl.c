@@ -374,7 +374,8 @@ int PlatformVSync(int mode) {
     return ret;
 }
 
-void SDLAudioCallback(void *userdata, SDL_AudioStream *stream, int additional_amount, int total_amount) {
+void SDLAudioCallback(void* userdata, SDL_AudioStream* stream,
+                      int additional_amount, int total_amount) {
     NOT_IMPLEMENTED;
 }
 
@@ -383,7 +384,8 @@ void MySsInitHot(void) {
     specs.freq = 44100;
     specs.format = SDL_AUDIO_S16;
     specs.channels = 2;
-    audio_stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &specs, SDLAudioCallback, NULL);
+    audio_stream = SDL_OpenAudioDeviceStream(
+        SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &specs, SDLAudioCallback, NULL);
     if (!audio_stream) {
         WARNF("SDL_OpenAudioDevice failed: %s", SDL_GetError());
         return;
@@ -921,7 +923,7 @@ static bool DoRectTouch(RECT* r1, RECT* r2) {
 void Draw_ClearImage(RECT* rect, u_char r, u_char g, u_char b) {
     int fbidx = GuessFrameBuffer(rect->x, rect->y);
     if (fbidx >= 0) {
-        fbidx = !fbidx; // TODO hack to avoid screen flickering
+        //fbidx = !fbidx; // TODO hack to avoid screen flickering
         glClearColor(
             (float)r / 255.f, (float)g / 255.f, (float)b / 255.f, 1.0f);
         if (fbidx == fb_index) {

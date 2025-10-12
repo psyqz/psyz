@@ -13,6 +13,7 @@ u16 clut;
 u_char ctlbuf[0x100];
 u_char _que[0x1800];
 u32 D_800E8640[0x10];
+static u32 GPU_STATUS = 0;
 
 typedef enum {
     // https://psx-spx.consoledev.net/graphicsprocessingunitgpu/#gpu-versions
@@ -27,7 +28,7 @@ struct Gpu {
         int (*exec)(u_long p1, u_long p2), u_long p1, u_long p2);
     /* 0x08 */ int (*addque2)(
         int (*exec)(u_long p1, u_long p2), u_long p1, int len, u_long p2);
-    /* 0x0C */ int (*clr)(u_long p1, u_long p2);
+    /* 0x0C */ int (*clr)(RECT* rect, u32 color);
     /* 0x10 */ void (*ctl)(unsigned int);
     /* 0x14 */ int (*cwb)();
     /* 0x18 */ int (*cwc)(u_long p1, u_long p2);
@@ -41,6 +42,8 @@ struct Gpu {
     /* 0x38 */ u_long (*status)(void);
     /* 0x3C */ int (*sync)(int mode);
 };
+
+u32 get_vram_wh(void);
 
 static int queue_len = 0;
 static u_long queue_buf[0x4000];
@@ -138,10 +141,6 @@ int GPU_Enqueue(u_long p1, u_long p2) {
     }
     return 0;
 }
-static int GPU_Clear(u_long p1, u_long p2) {
-    Draw_ClearImage((RECT*)p1, p2 & 0xFF, (p2 >> 8) & 0xFF, (p2 >> 16) & 0xFF);
-    return 0;
-}
 static int GPU_DataWrite(u_long p1, u_long p2) {
     Draw_LoadImage((RECT*)p1, (u_long*)p2);
     return 0;
@@ -151,6 +150,9 @@ static int GPU_DataRead(u_long p1, u_long p2) {
     return 0;
 }
 
+static int _param(int x) {
+    return 0;
+}
 static int psyz_addque2(
     int (*exec)(u_long p1, u_long p2), u_long p1, int len, u_long p2) {
     return exec(p1, p2);
@@ -159,10 +161,44 @@ static int psyz_addque(
     int (*exec)(u_long p1, u_long p2), u_long p1, u_long p2) {
     return psyz_addque2(exec, p1, 0, p2);
 }
-static int psyz_clr() {
-    NOT_IMPLEMENTED;
+
+// psyz_clr is very similar to _clr from libgpu/sys.c
+static DR_ENV clear_cmd;
+static int psyz_clr(RECT* pRect, u32 color) {
+    const u32 wh = get_vram_wh();
+    const unsigned short w = wh & 0xFFFF;
+    const unsigned short h = wh >> 16;
+    RECT rect = *pRect;
+    rect.w = CLAMP(pRect->w, 0, w - 1);
+    rect.h = CLAMP(pRect->h, 0, h - 1);
+    if (rect.x & 0x3F || rect.w & 0x3F) {
+        // unaligned clear
+        setlen(&clear_cmd, 8);
+        termPrim(&clear_cmd);
+        clear_cmd.code[0] = 0xE3000000; // set drawing area top left
+        clear_cmd.code[1] = 0xE4FFFFFF; // set drawing area bottom right
+        clear_cmd.code[2] = 0xE5000000; // set drawing offset
+        clear_cmd.code[3] = 0xE6000000;
+        clear_cmd.code[4] =
+            0xE1000000 | GPU_STATUS & 0x7FF | (color >> 0x1F) << 10;
+        clear_cmd.code[5] = (color & 0xFFFFFF) | 0x60000000;
+        clear_cmd.code[6] = *(u_long*)&rect.x;
+        clear_cmd.code[7] = *(u_long*)&rect.w;
+    } else {
+        // aligned clear
+        setlen(&clear_cmd, 5);
+        termPrim(&clear_cmd);
+        clear_cmd.code[0] = 0xE6000000; // mask bit setting
+        clear_cmd.code[1] =
+            0xE1000000 | GPU_STATUS & 0x7FF | (color >> 0x1F) << 10;
+        clear_cmd.code[2] = (color & 0xFFFFFF) | 0x02000000;
+        clear_cmd.code[3] = *(u_long*)&rect.x;
+        clear_cmd.code[4] = *(u_long*)&rect.w;
+    }
+    GPU_Enqueue((u_long)&clear_cmd, 0);
     return 0;
 }
+
 static void psyz_ctl(unsigned int cmd) {
     unsigned char op = (cmd >> 24) & 0x3F;
     switch (op) {
@@ -228,7 +264,7 @@ void GPU_cw(u_long* param) {
     gpu->ver = "psyz";
     gpu->addque = psyz_addque;
     gpu->addque2 = psyz_addque2;
-    gpu->clr = GPU_Clear;
+    gpu->clr = psyz_clr;
     gpu->ctl = psyz_ctl;
     gpu->cwb = psyz_cwb;
     gpu->cwc = GPU_Enqueue;

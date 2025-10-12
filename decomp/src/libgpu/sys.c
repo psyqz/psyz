@@ -48,7 +48,7 @@ static void memset(u_char* ptr, int value, int num);
 
 void _addque();
 int _addque2();
-int _clr();
+int _clr(RECT* rect, u32 color);
 void _ctl(unsigned int);
 int _cwb(u32* data, s32 n);
 void _cwc(u_long* packets);
@@ -99,8 +99,8 @@ int D_800B89BC[] = {512, 1024, 1024, 512, 1024};
 u_long move_image[] = {(4 << 24) | 0xFFFFFF, 0x80000000, 0, 0, 0};
 u_long D_800B89E4[] = {(4 << 24) | 0xFFFFFF, 0, 0, 0, 0};
 volatile u_long* GPU_DATA = (u_long*)0x1F801810;
-volatile u_long* GPU_STATUS = (u_long*)0x1F801814; // stat
-volatile u_long** DMA2_MADR = (volatile u_long**)0x1F8010A0;  // madr
+volatile u_long* GPU_STATUS = (u_long*)0x1F801814;           // stat
+volatile u_long** DMA2_MADR = (volatile u_long**)0x1F8010A0; // madr
 volatile u_long* DMA2_BCR = (u_long*)0x1F8010A4;
 volatile u_long* DMA2_CHCR = (u_long*)0x1F8010A8; // chcr
 volatile OT_TYPE** DMA6_MADR = (volatile OT_TYPE**)0x1F8010E0;
@@ -662,39 +662,42 @@ int _otc(OT_TYPE* ot, int n) {
     return n;
 }
 
-extern u32 D_800E8640[0x10];
+extern DR_ENV D_800E8640;
 int _clr(RECT* rect, u32 color) {
     u_long ptr;
 
     rect->w = CLAMP(rect->w, 0, info.w - 1);
     rect->h = CLAMP(rect->h, 0, info.h - 1);
     if (rect->x & 0x3F || rect->w & 0x3F) {
-        ptr = (u_long)&D_800E8640[9];
-        D_800E8640[0] = (ptr & 0xFFFFFF) | 0x08000000; // set up otag
-        D_800E8640[1] = 0xE3000000; // set drawing area top left
-        D_800E8640[2] = 0xE4FFFFFF; // set drawing area bottom right
-        D_800E8640[3] = 0xE5000000; // set drawing offset
-        D_800E8640[4] = 0xE6000000;
-        D_800E8640[5] =
+        // unaligned clear
+        ptr = (u_long)&D_800E8640.code[8];              // split in two packets
+        D_800E8640.tag = (ptr & 0xFFFFFF) | 0x08000000; // set up otag
+        D_800E8640.code[0] = 0xE3000000; // set drawing area top left
+        D_800E8640.code[1] = 0xE4FFFFFF; // set drawing area bottom right
+        D_800E8640.code[2] = 0xE5000000; // set drawing offset
+        D_800E8640.code[3] = 0xE6000000;
+        D_800E8640.code[4] =
             0xE1000000 | *GPU_STATUS & 0x7FF | (color >> 0x1F) << 10;
-        D_800E8640[6] = CMD_MONOCHROME_RECTANGLE(color);
-        D_800E8640[7] = *(s32*)&rect->x;
-        D_800E8640[8] = *(s32*)&rect->w;
-        D_800E8640[9] = 0x03FFFFFF;
-        D_800E8640[10] = _param(3) | 0xE3000000; // set drawing area top left
-        D_800E8640[11] =
+        D_800E8640.code[5] = CMD_MONOCHROME_RECTANGLE(color);
+        D_800E8640.code[6] = *(s32*)&rect->x;
+        D_800E8640.code[7] = *(s32*)&rect->w;
+        D_800E8640.code[8] = 0xFFFFFF | 0x03000000;
+        D_800E8640.code[9] =
+            _param(3) | 0xE3000000; // set drawing area top left
+        D_800E8640.code[10] =
             _param(4) | 0xE4000000; // set drawing area bottom right
-        D_800E8640[12] = _param(5) | 0xE5000000; // set drawing offset
+        D_800E8640.code[11] = _param(5) | 0xE5000000; // set drawing offset
     } else {
-        D_800E8640[0] = 0x05FFFFFF;
-        D_800E8640[1] = 0xE6000000; // mask bit setting
-        D_800E8640[2] =
+        // aligned clear
+        D_800E8640.tag = 0xFFFFFF | 0x05000000;
+        D_800E8640.code[0] = 0xE6000000; // mask bit setting
+        D_800E8640.code[1] =
             0xE1000000 | *GPU_STATUS & 0x7FF | (color >> 0x1F) << 10;
-        D_800E8640[3] = CMD_FILL_RECTANGLE_IN_VRAM(color);
-        D_800E8640[4] = *(s32*)&rect->x;
-        D_800E8640[5] = *(s32*)&rect->w;
+        D_800E8640.code[2] = CMD_FILL_RECTANGLE_IN_VRAM(color);
+        D_800E8640.code[3] = *(s32*)&rect->x;
+        D_800E8640.code[4] = *(s32*)&rect->w;
     }
-    _cwc((u_long*)D_800E8640);
+    _cwc((u_long*)&D_800E8640);
     return 0;
 }
 
@@ -921,6 +924,11 @@ static void memset(u_char* ptr, int value, int num) {
         *ptr++ = value;
     }
 }
+#endif
+
+#ifdef __psyz
+// exclusive to PSY-Z, useful to obtain info.w and info.h
+u32 get_vram_wh(void) { return *(u32*)&info.w; }
 #endif
 
 NOP;
