@@ -44,7 +44,7 @@ struct Gpu {
 
 static int queue_len = 0;
 static u_long queue_buf[0x4000];
-static int GPU_Sync(int mode) {
+static int GPU_Exeque() {
     RECT rect;
     Draw_ResetBuffer();
     for (int i = 0; i < queue_len; i++) {
@@ -92,10 +92,11 @@ static int GPU_Sync(int mode) {
         }
     }
     Draw_FlushBuffer();
-    Draw_Sync(mode);
+    Draw_ExequeSync();
     queue_len = 0;
     return queue_len;
 }
+static int psyz_exeque();
 int GPU_Enqueue(u_long p1, u_long p2) {
     int mask = (int)p2;
     if (mask) {
@@ -104,7 +105,8 @@ int GPU_Enqueue(u_long p1, u_long p2) {
     DR_ENV* env = (DR_ENV*)p1;
     while (true) {
         if (queue_len + env->len > LEN(queue_buf)) {
-            WARNF("GPU QUEUE FULL");
+            INFOF("GPU queue full, calling exeque");
+            psyz_exeque();
         } else if (sizeof(u_long) == 4) {
             // this is fine on 32-bit systems
             memcpy(queue_buf + queue_len, env->code, env->len * sizeof(u_long));
@@ -134,8 +136,7 @@ int GPU_Enqueue(u_long p1, u_long p2) {
         }
         env = (DR_ENV*)nextPrim(env);
     }
-    // TODO this draws immediately, on PSX this happens asynchronously
-    return GPU_Sync(0);
+    return 0;
 }
 static int GPU_Clear(u_long p1, u_long p2) {
     Draw_ClearImage((RECT*)p1, p2 & 0xFF, (p2 >> 8) & 0xFF, (p2 >> 16) & 0xFF);
@@ -194,8 +195,7 @@ static int psyz_cwb() {
     return 0;
 }
 static int psyz_exeque() {
-    NOT_IMPLEMENTED;
-    return 0;
+    return GPU_Exeque();
 }
 static int psyz_getctl(int) {
     NOT_IMPLEMENTED;

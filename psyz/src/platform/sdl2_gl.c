@@ -590,7 +590,7 @@ void Draw_SetDisplayMode(DisplayMode* mode) {
     ApplyDisplayPendingChanges();
 }
 
-int Draw_Sync(int mode) {
+int Draw_ExequeSync() {
     PollEvents();
     glFlush();
     return 0;

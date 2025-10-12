@@ -78,6 +78,6 @@ void Draw_PutDispEnv(DISPENV* disp);
 void Draw_ResetBuffer(void);
 void Draw_FlushBuffer(void);
 int Draw_PushPrim(u_long* packets, int max_len);
-int Draw_Sync(int mode);
+int Draw_ExequeSync();
 
 #endif
