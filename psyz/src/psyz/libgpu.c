@@ -1,8 +1,5 @@
 #include <psyz.h>
 #include <libgpu.h>
-#include <stdarg.h>
-#include <stdio.h>
-#include <memory.h>
 #include <log.h>
 #include "../draw.h"
 
@@ -58,7 +55,10 @@ static int GPU_Exeque() {
         case 0x00:
             // empty?!
             break;
-        case 0x02:
+        case 0x01: // clear cache
+            WARNF("unsupported command %s", "clear cache");
+            break;
+        case 0x02: // frame buffer rectangle draw
             rect.x = (short)(queue_buf[i + 1] & 0xFFFF);
             rect.y = (short)((queue_buf[i + 1] >> 16) & 0xFFFF);
             rect.w = (short)(queue_buf[i + 2] & 0xFFFF);
@@ -67,6 +67,15 @@ static int GPU_Exeque() {
                 &rect, (u_char)(op & 0xFF), (u_char)((op >> 8) & 0xFF),
                 (u_char)((op >> 16) & 0xFF));
             i += 2;
+            break;
+        case 0x80: // move image
+            WARNF("unsupported command %s", "move image");
+            break;
+        case 0xA0: // write image
+            WARNF("unsupported command %s", "write image");
+            break;
+        case 0xC0: // read image
+            WARNF("unsupported command %s", "read image");
             break;
         case 0xE1:
             Draw_SetTexpageMode((ParamDrawTexpageMode*)&op);
@@ -85,6 +94,9 @@ static int GPU_Exeque() {
             break;
         case 0xE5:
             Draw_SetOffset((int)op & 0x7FF, (int)(op >> 11) & 0x7FF);
+            break;
+        case 0xE6: // mask settings
+            WARNF("unsupported command %s", "mask settings");
             break;
         default:
             if (code >= 0x20 && code < 0x80) {
@@ -106,7 +118,7 @@ int GPU_Enqueue(u_long p1, u_long p2) {
         WARNF("mask not supported (mask:%08X)", mask);
     }
     DR_ENV* env = (DR_ENV*)p1;
-    while (true) {
+    while (1) {
         if (queue_len + env->len > LEN(queue_buf)) {
             INFOF("GPU queue full, calling exeque");
             psyz_exeque();

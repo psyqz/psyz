@@ -14,14 +14,14 @@ typedef unsigned char u_char;
 typedef unsigned short u_short;
 typedef unsigned long u_long;
 typedef unsigned int size_t;
+
 #else
 #include <sys/types.h>
-#endif
-
-#ifdef _WIN32
 typedef unsigned char u_char;
 typedef unsigned short u_short;
-typedef unsigned long long u_long;
+typedef unsigned short ushort;
+typedef unsigned long u_long;
+
 #endif
 
 typedef signed char s8;
@@ -32,7 +32,6 @@ typedef unsigned char u8;
 typedef unsigned short u16;
 typedef unsigned int u32;
 typedef unsigned long long u64;
-
 typedef signed char byte;
 
 #ifndef NULL
