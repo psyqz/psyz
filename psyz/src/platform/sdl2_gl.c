@@ -31,7 +31,8 @@ static const char gl33_vertex_shader[] = {
     "    float y = 1.0 - (pos.y / (resolution.y / 2.0));\n"
     "    gl_Position = vec4(x, y, 0.0, 1.0);\n"
     // gouraud colors
-    "    vertexColor = color;\n"
+    "    float norm_color = 252.0 * 2.0 / 256.0;"
+    "    vertexColor = color * vec4(norm_color, norm_color, norm_color, 1);\n"
     // select the right texture coords based on the tpage
     "    clut = uint(tex.z);\n"
     "    tpage = uint(tex.w);\n"
@@ -106,7 +107,7 @@ static const char gl33_fragment_shader[] = {
     "    } else {\n"
     "        texColor.a = 0;\n"
     "    }\n"
-    "    FragColor = texColor * vertexColor * vec4(2, 2, 2, 1);\n"
+    "    FragColor = texColor * vertexColor;\n"
     "}\n"};
 
 typedef struct {
@@ -448,6 +449,10 @@ u_long MyPadRead(int id) {
 }
 
 static bool is_window_visible = false;
+void Psyz_SetWindowScale(int scale) { set_wnd_scale = scale; }
+void Psyz_GetWindowSize(int* width, int* height) {
+    SDL_GetWindowSize(window, width, height);
+}
 static void ApplyDisplayPendingChanges() {
     if (!disp_on) {
         return;
@@ -923,7 +928,6 @@ static bool DoRectTouch(RECT* r1, RECT* r2) {
 void Draw_ClearImage(RECT* rect, u_char r, u_char g, u_char b) {
     int fbidx = GuessFrameBuffer(rect->x, rect->y);
     if (fbidx >= 0) {
-        //fbidx = !fbidx; // TODO hack to avoid screen flickering
         glClearColor(
             (float)r / 255.f, (float)g / 255.f, (float)b / 255.f, 1.0f);
         if (fbidx == fb_index) {

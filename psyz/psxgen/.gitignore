@@ -1,0 +1,7 @@
+.emu
+memcard*.mcd
+*.vert
+*.frag
+*.lua
+output.*
+output_*.png
