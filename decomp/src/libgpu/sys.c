@@ -5,14 +5,16 @@
 
 struct Gpu {
     /* 0x00 */ const char* ver;
-    /* 0x04 */ void (*addque)();
-    /* 0x08 */ int (*addque2)();
-    /* 0x0C */ int (*clr)();
+    /* 0x04 */ int (*addque)(
+        int (*exec)(u_long p1, u_long p2), u_long p1, u_long p2);
+    /* 0x08 */ int (*addque2)(
+        int (*exec)(u_long p1, u_long p2), u_long p1, int len, u_long p2);
+    /* 0x0C */ int (*clr)(RECT* rect, unsigned int color);
     /* 0x10 */ void (*ctl)(unsigned int);
     /* 0x14 */ int (*cwb)(u32* data, s32 n);
     /* 0x18 */ void (*cwc)(u_long* packets);
-    /* 0x1C */ int (*drs)();
-    /* 0x20 */ int (*dws)();
+    /* 0x1C */ int (*drs)(RECT* rect, u_long* data);
+    /* 0x20 */ int (*dws)(RECT* rect, u_long* data);
     /* 0x24 */ int (*exeque)();
     /* 0x28 */ int (*getctl)(int);
     /* 0x2C */ int (*otc)(OT_TYPE* ot, s32 n);
@@ -46,14 +48,14 @@ void SetDrawEnv2(DR_ENV* dr_env, DRAWENV* env);
 static void memset(u_char* ptr, int value, int num);
 #endif
 
-void _addque();
-int _addque2();
+int _addque(int (*exec)(u_long p1, u_long p2), u_long p1, u_long p2);
+int _addque2(int (*exec)(u_long p1, u_long p2), u_long p1, int len, u_long p2);
 int _clr(RECT* rect, u32 color);
 void _ctl(unsigned int);
 int _cwb(u32* data, s32 n);
 void _cwc(u_long* packets);
-int _drs();
-int _dws();
+int _drs(RECT* rect, u_long* data);
+int _dws(RECT* rect, u_long* data);
 int _exeque();
 int _getctl(int);
 int _otc(OT_TYPE* ot, s32 n);
@@ -91,7 +93,7 @@ static struct Gpu _gpucb = {
     _sync,
 };
 static struct Gpu* gpu = &_gpucb;
-int (*GPU_printf)() = (int (*)())printf;
+int (*GPU_printf)(const char* fmt, ...) = printf;
 static struct Debug info = {0};
 
 int D_800B89A8[] = {1024, 1024, 1024, 1024, 1024};
@@ -256,23 +258,27 @@ void checkRECT(const char* log, RECT* r) {
 int ClearImage(RECT* rect, u8 r, u8 g, u8 b) {
     checkRECT("ClearImage", rect);
     return D_800B8920->addque2(
-        D_800B8920->clr, rect, sizeof(RECT), (b << 0x10) | (g << 8) | r);
+        (int (*)(u_long, u_long))D_800B8920->clr, (u_long)rect, sizeof(RECT),
+        (b << 0x10) | (g << 8) | r);
 }
 
 int ClearImage2(RECT* rect, u8 r, u8 g, u8 b) {
     checkRECT("ClearImage", rect);
-    return D_800B8920->addque2(D_800B8920->clr, rect, sizeof(RECT),
-                               0x80000000 | (b << 0x10) | (g << 8) | r);
+    return D_800B8920->addque2(
+        (int (*)(u_long, u_long))D_800B8920->clr, (u_long)rect, sizeof(RECT),
+        0x80000000 | (b << 0x10) | (g << 8) | r);
 }
 
 int LoadImage(RECT* rect, u_long* p) {
     checkRECT("LoadImage", rect);
-    return D_800B8920->addque2(D_800B8920->dws, rect, sizeof(RECT), p);
+    return D_800B8920->addque2((int (*)(u_long, u_long))D_800B8920->dws,
+                               (u_long)rect, sizeof(RECT), (u_long)p);
 }
 
 int StoreImage(RECT* rect, u_long* p) {
     checkRECT("StoreImage", rect);
-    return D_800B8920->addque2(D_800B8920->drs, rect, sizeof(RECT), p);
+    return D_800B8920->addque2((int (*)(u_long, u_long))D_800B8920->drs,
+                               (u_long)rect, sizeof(RECT), (u_long)p);
 }
 
 int MoveImage(RECT* rect, int x, int y) {
@@ -283,8 +289,8 @@ int MoveImage(RECT* rect, int x, int y) {
     move_image[2] = *(int*)&rect->x;
     move_image[3] = y << 0x10 | (u16)x;
     move_image[4] = *(int*)&rect->w;
-    return D_800B8920->addque2(
-        D_800B8920->cwc, move_image, sizeof(move_image), 0);
+    return D_800B8920->addque2((int (*)(u_long, u_long))D_800B8920->cwc,
+                               (u_long)move_image, sizeof(move_image), 0);
 }
 
 OT_TYPE* ClearOTag(OT_TYPE* ot, int n) {
@@ -321,7 +327,8 @@ void DrawOTag(OT_TYPE* p) {
     if (info.level >= 2) {
         GPU_printf("DrawOTag(%08x)...\n", p);
     }
-    D_800B8920->addque2(D_800B8920->cwc, p, 0, 0);
+    D_800B8920->addque2(
+        (int (*)(u_long, u_long))D_800B8920->cwc, (u_long)p, 0, 0);
 }
 
 DRAWENV* PutDrawEnv(DRAWENV* env) {
@@ -331,7 +338,8 @@ DRAWENV* PutDrawEnv(DRAWENV* env) {
 
     SetDrawEnv2(&env->dr_env, env);
     termPrim(&env->dr_env);
-    D_800B8920->addque2(D_800B8920->cwc, &env->dr_env, sizeof(DR_ENV), 0);
+    D_800B8920->addque2((int (*)(u_long, u_long))D_800B8920->cwc,
+                        (u_long)&env->dr_env, sizeof(DR_ENV), 0);
     __builtin_memcpy(&info.draw, env, sizeof(DRAWENV));
     return env;
 }
@@ -342,7 +350,8 @@ void DrawOTagEnv(OT_TYPE* p, DRAWENV* env) {
     }
     SetDrawEnv2(&env->dr_env, env);
     setaddr(&env->dr_env, p);
-    D_800B8920->addque2(D_800B8920->cwc, &env->dr_env, sizeof(DR_ENV), 0);
+    D_800B8920->addque2((int (*)(u_long, u_long))D_800B8920->cwc,
+                        (u_long)&env->dr_env, sizeof(DR_ENV), 0);
     __builtin_memcpy(&info.draw, env, sizeof(DRAWENV));
 }
 
@@ -819,7 +828,9 @@ int _param(int x) {
     return *GPU_DATA & 0xFFFFFF;
 }
 
-void _addque(int arg0, int arg1, int arg2) { _addque2(arg0, arg1, 0, arg2); }
+int _addque(int (*exec)(u_long p1, u_long p2), u_long p1, u_long p2) {
+    return _addque2(exec, p1, 0, p2);
+}
 
 INCLUDE_ASM("asm/nonmatchings/libgpu/sys", _addque2);
 

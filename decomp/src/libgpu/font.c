@@ -241,7 +241,7 @@ extern u16 clut;           // static, bss
 void SetDumpFnt(int id) {
     if (id >= 0 && id <= n_fonts_open) {
         dump_id = id;
-        GPU_printf = (int (*)())FntPrint;
+        GPU_printf = (int (*)(const char* fmt, ...))FntPrint;
     }
 }
 

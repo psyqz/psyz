@@ -2,7 +2,11 @@
 #define LIBGPU_H
 #include <types.h>
 
+#ifdef __psyz
+extern int (*GPU_printf)(const char* fmt, ...);
+#else
 extern int (*GPU_printf)(); /* printf() object */
+#endif
 
 #define limitRange(x, l, h) ((x) = ((x) < (l) ? (l) : (x) > (h) ? (h) : (x)))
 
