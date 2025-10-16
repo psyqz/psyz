@@ -351,13 +351,13 @@ static void UploadTextures() {
                     GL_UNSIGNED_SHORT_1_5_5_5_REV, g_RawVram);
 }
 
-static void PresentBufferToScreen() {
+static void PresentBufferToScreen(unsigned int index) {
     if (!window && !InitPlatform()) {
         return;
     }
     glFlush();
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
-    glBindFramebuffer(GL_READ_FRAMEBUFFER, fb[fb_index]);
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, fb[index]);
     glBlitFramebuffer(
         0, 0, fb_w, fb_h, 0, 0, fb_w, fb_h, GL_COLOR_BUFFER_BIT, GL_NEAREST);
 }
@@ -405,7 +405,7 @@ int PlatformVSync(int mode) {
         ret = (unsigned short)(cur - elapsed_from_beginning);
     }
     last_vsync = cur;
-    PresentBufferToScreen();
+    PresentBufferToScreen(fb_index);
     return ret;
 }
 
@@ -572,20 +572,19 @@ void Draw_DisplayEnable(unsigned int on) {
 }
 
 void Draw_DisplayArea(unsigned int x, unsigned int y) {
-    PresentBufferToScreen();
     // TODO dirty hack where the frame buffer gets always flipped regardless
     // of x and y being different. Maybe a future idea would be to have a
     // fbidx_prev, so if the actual fbidx doesn't change between frames, we
     // still force a SDL_GL_SwapWindow
-    static int fbidx = 1;
-    fbidx ^= 1;
+    int fbidx = y >= 240 || x >= 256;
     fbrect[fbidx].x = (short)x;
     fbrect[fbidx].y = (short)y;
     fbrect[fbidx].w = (short)cur_wnd_width;
     fbrect[fbidx].h = (short)cur_wnd_height;
     if (fb_index != fbidx) {
-        fb_index = fbidx;
+        PresentBufferToScreen(fb_index);
         SDL_GL_SwapWindow(window);
+        fb_index = fbidx;
     }
     glFlush();
     glBindFramebuffer(GL_FRAMEBUFFER, fb[fb_index]);
