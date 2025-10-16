@@ -150,9 +150,7 @@ static int GPU_DataRead(u_long p1, u_long p2) {
     return 0;
 }
 
-static int _param(int x) {
-    return 0;
-}
+static int _param(int x) { return 0; }
 static int psyz_addque2(
     int (*exec)(u_long p1, u_long p2), u_long p1, int len, u_long p2) {
     return exec(p1, p2);
@@ -230,9 +228,7 @@ static int psyz_cwb() {
     NOT_IMPLEMENTED;
     return 0;
 }
-static int psyz_exeque() {
-    return GPU_Exeque();
-}
+static int psyz_exeque() { return GPU_Exeque(); }
 static int psyz_getctl(int) {
     NOT_IMPLEMENTED;
     return 0;

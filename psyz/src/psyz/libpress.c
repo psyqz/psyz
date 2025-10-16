@@ -1,5 +1,3 @@
 #include <log.h>
 
-void DecDCTReset(int mode) {
-    NOT_IMPLEMENTED;
-}
+void DecDCTReset(int mode) { NOT_IMPLEMENTED; }

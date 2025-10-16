@@ -13,11 +13,9 @@ set(SDL_SHARED OFF CACHE BOOL "" FORCE)
 set(SDL_STATIC ON CACHE BOOL "" FORCE)
 set(SDL_TEST OFF CACHE BOOL "" FORCE)
 
-add_library(psyz STATIC
+set(PSYZ_SOURCES
     src/platform/log.c
     src/platform/common.c
-    src/platform/sdl2_gl.c
-    src/platform/plat_unix.c
     src/psyz/libapi.c
     src/psyz/libetc.c
     src/psyz/libgpu.c
@@ -38,6 +36,23 @@ add_library(psyz STATIC
     src/psyz/libsn.c
     src/psyz/libpress.c
 )
+set(PSYZ_LIBS)
+if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+    list(APPEND PSYZ_SOURCES src/platform/plat_win.c)
+    list(APPEND PSYZ_SOURCES src/platform/sdl2_gl.c)
+    list(APPEND PSYZ_SOURCES src/platform/glad.c)
+    list(APPEND PSYZ_LIBS -lopengl32)
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+    list(APPEND PSYZ_SOURCES src/platform/plat_unix.c)
+    list(APPEND PSYZ_SOURCES src/platform/sdl2_gl.c)
+    list(APPEND PSYZ_LIBS -framework OpenGL)
+else()
+    list(APPEND PSYZ_SOURCES src/platform/plat_unix.c)
+    list(APPEND PSYZ_SOURCES src/platform/sdl2_gl.c)
+    list(APPEND PSYZ_LIBS -lGL)
+endif()
+
+add_library(psyz STATIC ${PSYZ_SOURCES})
 target_compile_definitions(psyz PUBLIC __psyz)
 target_include_directories(psyz PUBLIC include)
-target_link_libraries(psyz PUBLIC SDL3::SDL3-static -lGL)
+target_link_libraries(psyz PUBLIC SDL3::SDL3-static ${PSYZ_LIBS})

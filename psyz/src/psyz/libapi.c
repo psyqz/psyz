@@ -1,6 +1,7 @@
 #include <psyz.h>
 #include <log.h>
 #include <kernel.h>
+#include "libgpu.h"
 #include "../draw.h"
 
 int MyVSync(int mode);
@@ -128,7 +129,7 @@ long TestEvent(unsigned long event) {
     return events[event].status;
 }
 
-void EnterCriticalSection(void) { NOT_IMPLEMENTED; }
+//void EnterCriticalSection(void) { NOT_IMPLEMENTED; }
 
 void ExitCriticalSection(void) { NOT_IMPLEMENTED; }
 

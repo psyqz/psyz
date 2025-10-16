@@ -1,19 +1,31 @@
 #include "psyz.h"
+
 #include <assert.h>
 #include <stdlib.h>
 #include <stddef.h>
-#include "libgpu.h"
+
 #ifdef _MSC_VER
 #include <SDL.h>
+#include "glad/glad.h"
+
+#elif defined(__MINGW32__)
+#include <SDL3/SDL.h>
+#include "glad/glad.h"
+
 #else
 #include <SDL3/SDL.h>
-#endif
-#include <libetc.h>
-#include <libgte.h>
-#include <libgpu.h>
-#include "../draw.h"
 #include <SDL3/SDL_opengl.h>
 #include <GLES3/gl3.h>
+
+#endif
+
+// HACK to avoid conflicting with RECT from windef.h
+// It renames the libgpu RECT into PS1_RECT, ensuring the windef struct RECT
+// does not conflict. The hack is applied to all platform for consistency.
+#define RECT PS1_RECT
+#include "libgpu.h"
+#include "../draw.h"
+#undef RECT
 
 static const char gl33_vertex_shader[] = {
     "#version 330 core\n"
@@ -136,7 +148,7 @@ static SDL_Window* window = NULL;
 static SDL_GLContext glContext = NULL;
 static GLuint fb[2] = {0, 0};
 static GLuint fbtex[2] = {0, 0};
-static RECT fbrect[2] = {{0}, {0}};
+static PS1_RECT fbrect[2] = {{0}, {0}};
 static unsigned int fb_index = 0;
 static GLuint shader_program = 0;
 static Uint32 elapsed_from_beginning = 0;
@@ -212,9 +224,17 @@ static int cur_disp_vert = -1;
 static int fb_w = 0, fb_h = 0;
 
 static void QuitPlatform(void);
+static bool is_window_visible = false;
+static bool is_platform_initialized = false;
+static bool is_platform_init_successful = false;
 bool InitPlatform() {
-    atexit(QuitPlatform);
+    if (is_platform_initialized) {
+        return is_platform_init_successful;
+    }
+    // avoid re-initializing it continuously on failures
+    is_platform_initialized = true;
 
+    atexit(QuitPlatform);
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) {
         ERRORF("SDL_Init: %s", SDL_GetError());
         return false;
@@ -240,9 +260,16 @@ bool InitPlatform() {
         return false;
     }
     SDL_GL_MakeCurrent(window, glContext);
-    glLineWidth(SCREEN_SCALE);
-    INFOF("opengl %s initialized", glGetString(GL_VERSION));
 
+#ifdef _WIN32
+    if (!gladLoadGL()) {
+        ERRORF("gladLoadGL failed");
+        return false;
+    }
+#endif
+
+    INFOF("opengl %s initialized", glGetString(GL_VERSION));
+    glLineWidth(SCREEN_SCALE);
     shader_program = Init_SetupShader();
     if (!shader_program) {
         ERRORF("failed to compile shaders: %s", SDL_GetError());
@@ -295,6 +322,7 @@ bool InitPlatform() {
     elapsed_from_beginning = SDL_GetTicks();
     last_vsync = elapsed_from_beginning;
     cur_tpage = 0;
+    is_platform_init_successful = true;
     return true;
 }
 
@@ -324,6 +352,9 @@ static void UploadTextures() {
 }
 
 static void PresentBufferToScreen() {
+    if (!window && !InitPlatform()) {
+        return;
+    }
     glFlush();
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
     glBindFramebuffer(GL_READ_FRAMEBUFFER, fb[fb_index]);
@@ -339,8 +370,11 @@ static void QuitPlatform() {
     if (window) {
         SDL_DestroyWindow(window);
         window = NULL;
+        is_window_visible = false;
     }
     SDL_Quit();
+    is_platform_initialized = false;
+    is_platform_init_successful = false;
 }
 
 void ResetPlatform(void) {
@@ -448,7 +482,6 @@ u_long MyPadRead(int id) {
     return pressed;
 }
 
-static bool is_window_visible = false;
 void Psyz_SetWindowScale(int scale) { set_wnd_scale = scale; }
 void Psyz_GetWindowSize(int* width, int* height) {
     SDL_GetWindowSize(window, width, height);
@@ -457,9 +490,8 @@ static void ApplyDisplayPendingChanges() {
     if (!disp_on) {
         return;
     }
-    if (!window) {
-        InitPlatform();
-        is_window_visible = false;
+    if (!window && !InitPlatform()) {
+        return;
     }
     if (cur_wnd_width != set_wnd_width || cur_wnd_height != set_wnd_height ||
         cur_wnd_scale != set_wnd_scale) {
@@ -511,7 +543,7 @@ static void ApplyDisplayPendingChanges() {
     }
 }
 
-static bool IsInRect(unsigned int x, unsigned int y, RECT* rect) {
+static bool IsInRect(unsigned int x, unsigned int y, PS1_RECT* rect) {
     return x >= rect->x && x < rect->x + rect->w && y >= rect->y &&
            y < rect->y + rect->h;
 }
@@ -720,7 +752,7 @@ int Draw_PushPrim(u_long* packets, int max_len) {
     bool isTextured = (code & TEXTURED) != 0;
     bool isGouraud = (code & GOURAUD) != 0;
     bool isShadeTex = !((code & 1) && isTextured && !isLine);
-    ushort tpage = -1, clut = -1, pad2, pad3;
+    u16 tpage = -1, clut = -1, pad2, pad3;
     Vertex* v;
 
     // to ensure we always have space, we pretend we want to allocate a quad
@@ -921,11 +953,11 @@ void Draw_SetOffset(int x, int y) {
     // implements SetDrawEnv, SetDrawOffset
     NOT_IMPLEMENTED;
 }
-static bool DoRectTouch(RECT* r1, RECT* r2) {
+static bool DoRectTouch(PS1_RECT* r1, PS1_RECT* r2) {
     return !(r1->x + r1->w <= r2->x || r2->x + r2->w <= r1->x ||
              r1->y + r1->h <= r2->y || r2->y + r2->h <= r1->y);
 }
-void Draw_ClearImage(RECT* rect, u_char r, u_char g, u_char b) {
+void Draw_ClearImage(PS1_RECT* rect, u_char r, u_char g, u_char b) {
     int fbidx = GuessFrameBuffer(rect->x, rect->y);
     if (fbidx >= 0) {
         glClearColor(
@@ -939,7 +971,7 @@ void Draw_ClearImage(RECT* rect, u_char r, u_char g, u_char b) {
         }
     }
 
-    RECT fixedRect;
+    PS1_RECT fixedRect;
     fixedRect.x = CLAMP(rect->x, 0, 1024);
     fixedRect.y = CLAMP(rect->y, 0, 1024);
     fixedRect.w = CLAMP(rect->w, 0, 1024);
@@ -954,18 +986,18 @@ void Draw_ClearImage(RECT* rect, u_char r, u_char g, u_char b) {
         vram += VRAM_W;
     }
 }
-void Draw_LoadImage(RECT* rect, u_long* p) {
-    ushort* mem = (ushort*)p;
-    ushort* vram = g_RawVram;
+void Draw_LoadImage(PS1_RECT* rect, u_long* p) {
+    u16* mem = (u16*)p;
+    u16* vram = g_RawVram;
     vram += rect->x + rect->y * VRAM_W;
     for (int i = 0; i < rect->h; i++) {
-        memcpy(vram, mem, rect->w * sizeof(ushort));
+        memcpy(vram, mem, rect->w * sizeof(u16));
         mem += rect->w;
         vram += VRAM_W;
     }
     is_vram_texture_invalid = true;
 }
-void Draw_StoreImage(RECT* rect, u_long* p) {
+void Draw_StoreImage(PS1_RECT* rect, u_long* p) {
     u16* mem = (u16*)p;
     u16* vram = g_RawVram;
     vram += rect->x + rect->y * VRAM_W;

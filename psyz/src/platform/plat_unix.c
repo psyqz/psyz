@@ -50,12 +50,14 @@ static void adjust_path(char* dst, const char* src, int maxlen) {
     }
 }
 
-static void populate_entry(const char* baseDir, struct DIRENTRY* dst, struct dirent* src) {
+static void populate_entry(
+    const char* baseDir, struct DIRENTRY* dst, struct dirent* src) {
     char buf[512];
     struct stat fileStat = {0};
     strncpy(buf, baseDir, sizeof(buf));
     if (!path_join(buf, src->d_name, sizeof(buf))) {
-        ERRORF("failed to join '%s' and '%s': strings are too large", baseDir, src->d_name);
+        ERRORF("failed to join '%s' and '%s': strings are too large", baseDir,
+               src->d_name);
         return;
     }
     if (stat(buf, &fileStat) != 0) {
@@ -82,9 +84,7 @@ typedef struct {
     struct dirent* last_entry;
 } DIRENTRY_RESERVED;
 static DIRENTRY_RESERVED singleton_dir = {0};
-static bool is_filesearch_handle_open() {
-    return singleton_dir.dir != NULL;
-}
+static bool is_filesearch_handle_open() { return singleton_dir.dir != NULL; }
 static void close_filesearch_handle() {
     if (is_filesearch_handle_open()) {
         closedir(singleton_dir.dir);
@@ -102,7 +102,7 @@ static DIRENTRY_RESERVED* open_filesearch_handle(const char* basePath) {
     strncpy(singleton_dir.base_dir, basePath, sizeof(singleton_dir.base_dir));
     singleton_dir.dir = opendir(singleton_dir.base_dir);
     if (singleton_dir.dir) {
-        struct dirent *entry;
+        struct dirent* entry;
         do {
             entry = readdir(singleton_dir.dir);
             if (!entry) {
@@ -118,7 +118,7 @@ static struct dirent* read_filesearch_handle() {
     if (!singleton_dir.dir) {
         return NULL;
     }
-    struct dirent *cur = singleton_dir.last_entry;
+    struct dirent* cur = singleton_dir.last_entry;
     if (!cur) {
         close_filesearch_handle();
         return NULL;
@@ -171,7 +171,7 @@ long my_format(char* fs) {
         if (entry->d_type != DT_REG) {
             continue;
         }
-        strncpy(path + path_end, entry->d_name, sizeof(path)-path_end);
+        strncpy(path + path_end, entry->d_name, sizeof(path) - path_end);
         if (remove(path)) {
             return 0;
         }
@@ -196,7 +196,7 @@ long my_erase(char* path) {
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/ioctl.h>
-int my_open(const char *devname, int flag) {
+int my_open(const char* devname, int flag) {
     // only map the known flags and discard the rest
     int oflag = (int)flag & (O_WRONLY | O_RDWR | O_NONBLOCK | O_CREAT);
     char path[0x100];
@@ -211,9 +211,11 @@ int my_open(const char *devname, int flag) {
         }
         if (!(st.st_mode & S_IFREG)) {
             if (st.st_mode & S_IFDIR) {
-                WARNF("path '%s' mapped from '%s' is a directory", path, devname);
+                WARNF(
+                    "path '%s' mapped from '%s' is a directory", path, devname);
             } else {
-                WARNF("path '%s' mapped from '%s' is not a regular file", path, devname);
+                WARNF("path '%s' mapped from '%s' is not a regular file", path,
+                      devname);
             }
             return -1;
         }
@@ -221,7 +223,13 @@ int my_open(const char *devname, int flag) {
     }
 }
 int my_close(int fd) { return (long)close((int)fd); }
-long my_lseek(long fd, long offset, long flag) { return lseek((int)fd, (off_t)offset, (int)flag); }
-long my_read(long fd, void *buf, long n) { return (long)read((int)fd, buf, (size_t)n); }
-long my_write(long fd, void *buf, long n) { return (long)write((int)fd, buf, (size_t)n); }
+long my_lseek(long fd, long offset, long flag) {
+    return lseek((int)fd, (off_t)offset, (int)flag);
+}
+long my_read(long fd, void* buf, long n) {
+    return (long)read((int)fd, buf, (size_t)n);
+}
+long my_write(long fd, void* buf, long n) {
+    return (long)write((int)fd, buf, (size_t)n);
+}
 long my_ioctl(long fd, long com, long arg) { return ioctl((int)fd, com, arg); }

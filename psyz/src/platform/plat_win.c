@@ -26,3 +26,8 @@ long my_erase(char* path) {
     DEBUGF("remove('%s')", adjPath);
     return remove(adjPath) == 0;
 }
+
+long my_format(char* fs) {
+    NOT_IMPLEMENTED;
+    return 0;
+}

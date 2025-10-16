@@ -5,8 +5,15 @@
 #include <sys/stat.h>
 
 void _bu_init(void) {
+#ifdef _MSC_VER
+    NOT_IMPLEMENTED;
+#elif __MINGW32__
+    mkdir("bu00");
+    mkdir("bu10");
+#else
     mkdir("bu00", 0755);
     mkdir("bu10", 0755);
+#endif
 }
 
 long _card_info(long chan) {
