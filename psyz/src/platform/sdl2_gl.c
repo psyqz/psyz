@@ -43,8 +43,7 @@ static const char gl33_vertex_shader[] = {
     "    float y = 1.0 - (pos.y / (resolution.y / 2.0));\n"
     "    gl_Position = vec4(x, y, 0.0, 1.0);\n"
     // gouraud colors
-    "    float norm_color = 252.0 * 2.0 / 256.0;"
-    "    vertexColor = color * vec4(norm_color, norm_color, norm_color, 1);\n"
+    "    vertexColor = color * vec4(2, 2, 2, 1);\n"
     // select the right texture coords based on the tpage
     "    clut = uint(tex.z);\n"
     "    tpage = uint(tex.w);\n"
@@ -130,6 +129,9 @@ typedef struct {
 typedef struct {
     GLint x, y, w, h;
 } GLrecti;
+typedef struct {
+    GLint x, y;
+} GLposi; // this is custom
 
 #define VRGBA(p) (*(unsigned int*)(&((p).r)))
 #define SET_TC(p, tpage, clut) (p)->t = (u16)tpage, (p)->c = (u16)clut;
@@ -162,7 +164,8 @@ static GLuint vram_textures[Num_Tex];
 static bool is_vram_texture_invalid = false;
 static SDL_AudioStream* audio_stream = NULL;
 static SDL_AudioDeviceID audio_device_id = {0};
-static GLrecti scissor = {0};
+static GLposi scissor_start = {0};
+static GLposi scissor_end = {0x10000, 0x10000};
 
 static GLuint Init_CompileShader(const char* source, GLenum kind) {
     GLuint shader = glCreateShader(kind);
@@ -486,6 +489,30 @@ void Psyz_SetWindowScale(int scale) { set_wnd_scale = scale; }
 void Psyz_GetWindowSize(int* width, int* height) {
     SDL_GetWindowSize(window, width, height);
 }
+static void UpdateScissor() {
+    if (!window || !InitPlatform()) {
+        return;
+    }
+
+    // flush all enqueued geometry with the previous scissor settings
+    // TODO don't call Draw_FlushBuffer if equal scissor settings are repeated
+    Draw_FlushBuffer();
+
+    int width = scissor_end.x - scissor_start.x + 1;
+    int height = scissor_end.y - scissor_start.y + 1;
+    if (width <= 0 || height <= 0) {
+        WARNF("scissor out of range: {%d, %d, %d, %d}", scissor_start.x,
+              scissor_start.y, scissor_end.x, scissor_end.y);
+        return;
+    }
+    int sx = scissor_start.x * cur_wnd_scale;
+    int sy = scissor_start.y * cur_wnd_scale;
+    int sw = width * cur_wnd_scale;
+    int sh = height * cur_wnd_scale;
+    int flipped_y = fb_h - (sy + sh); // OpenGL scissor origin to bottom-left
+    glEnable(GL_SCISSOR_TEST);
+    glScissor(sx, flipped_y, sw, sh);
+}
 static void ApplyDisplayPendingChanges() {
     if (!disp_on) {
         return;
@@ -565,7 +592,9 @@ void Draw_DisplayEnable(unsigned int on) {
         // TODO unbind the frame buffer and display a black screen
         glBindFramebuffer(GL_FRAMEBUFFER, fb[fb_index]);
         glClearColor(0, 0, 0, 1);
+        glDisable(GL_SCISSOR_TEST);
         glClear(GL_COLOR_BUFFER_BIT);
+        glEnable(GL_SCISSOR_TEST);
     } else {
         ApplyDisplayPendingChanges();
     }
@@ -588,6 +617,7 @@ void Draw_DisplayArea(unsigned int x, unsigned int y) {
     }
     glFlush();
     glBindFramebuffer(GL_FRAMEBUFFER, fb[fb_index]);
+    UpdateScissor();
 }
 
 void Draw_DisplayHorizontalRange(unsigned int start, unsigned int end) {
@@ -948,11 +978,15 @@ void Draw_SetTextureWindow(unsigned int mask_x, unsigned int mask_y,
 }
 void Draw_SetAreaStart(int x, int y) {
     // implements SetDrawArea, SetDrawEnv
-    NOT_IMPLEMENTED;
+    scissor_start.x = x;
+    scissor_start.y = y;
+    UpdateScissor();
 }
 void Draw_SetAreaEnd(int x, int y) {
-    // implements ??
-    NOT_IMPLEMENTED;
+    // implements SetDrawArea, SetDrawEnv
+    scissor_end.x = x;
+    scissor_end.y = y;
+    UpdateScissor();
 }
 void Draw_SetOffset(int x, int y) {
     // implements SetDrawEnv, SetDrawOffset
@@ -965,6 +999,13 @@ static bool DoRectTouch(PS1_RECT* r1, PS1_RECT* r2) {
 void Draw_ClearImage(PS1_RECT* rect, u_char r, u_char g, u_char b) {
     int fbidx = GuessFrameBuffer(rect->x, rect->y);
     if (fbidx >= 0) {
+        GLposi prev_start = scissor_start;
+        GLposi prev_end = scissor_end;
+        scissor_start.x = rect->x;
+        scissor_start.y = rect->y;
+        scissor_end.x = rect->x + rect->w - 1;
+        scissor_end.y = rect->y + rect->h - 1;
+        UpdateScissor();
         glClearColor(
             (float)r / 255.f, (float)g / 255.f, (float)b / 255.f, 1.0f);
         if (fbidx == fb_index) {
@@ -974,6 +1015,9 @@ void Draw_ClearImage(PS1_RECT* rect, u_char r, u_char g, u_char b) {
             glClear(GL_COLOR_BUFFER_BIT);
             glBindFramebuffer(GL_FRAMEBUFFER, fb[fb_index]);
         }
+        scissor_start = prev_start;
+        scissor_end = prev_end;
+        UpdateScissor();
     }
 
     PS1_RECT fixedRect;
