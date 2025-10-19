@@ -144,10 +144,6 @@ int main(void) {
 
         add_cube(cdb->ot, cdb->s, &transform);
 
-        DrawSync(0);
-        VSync(0);
-        SetDispMask(1);
-
         ClearImage(&cdb->draw.clip, 60, 120, 120);
 
 #ifdef USE_REVERSE_OT
@@ -156,6 +152,10 @@ int main(void) {
         DrawOTag(&cdb->ot[0]);
 #endif
         FntFlush(-1);
+
+        DrawSync(0);
+        VSync(0);
+        SetDispMask(1);
     }
 
     return 0;

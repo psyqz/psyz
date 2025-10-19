@@ -129,7 +129,7 @@ long TestEvent(unsigned long event) {
     return events[event].status;
 }
 
-//void EnterCriticalSection(void) { NOT_IMPLEMENTED; }
+void EnterCriticalSection(void) { NOT_IMPLEMENTED; }
 
 void ExitCriticalSection(void) { NOT_IMPLEMENTED; }
 

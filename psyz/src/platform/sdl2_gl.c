@@ -164,7 +164,8 @@ static GLuint vram_textures[Num_Tex];
 static bool is_vram_texture_invalid = false;
 static SDL_AudioStream* audio_stream = NULL;
 static SDL_AudioDeviceID audio_device_id = {0};
-static GLposi scissor_start = {0};
+static GLposi draw_offset = {0, 0};
+static GLposi scissor_start = {0, 0};
 static GLposi scissor_end = {0x10000, 0x10000};
 
 static GLuint Init_CompileShader(const char* source, GLenum kind) {
@@ -358,11 +359,11 @@ static void PresentBufferToScreen(unsigned int index) {
     if (!window && !InitPlatform()) {
         return;
     }
-    glFlush();
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
     glBindFramebuffer(GL_READ_FRAMEBUFFER, fb[index]);
     glBlitFramebuffer(
         0, 0, fb_w, fb_h, 0, 0, fb_w, fb_h, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+    SDL_GL_SwapWindow(window);
 }
 
 static void QuitPlatform() {
@@ -408,7 +409,9 @@ int PlatformVSync(int mode) {
         ret = (unsigned short)(cur - elapsed_from_beginning);
     }
     last_vsync = cur;
-    PresentBufferToScreen(fb_index);
+    if (mode == 0) {
+        PresentBufferToScreen(fb_index);
+    }
     return ret;
 }
 
@@ -505,8 +508,10 @@ static void UpdateScissor() {
               scissor_start.y, scissor_end.x, scissor_end.y);
         return;
     }
-    int sx = scissor_start.x * cur_wnd_scale;
-    int sy = scissor_start.y * cur_wnd_scale;
+    int absx = scissor_start.x - draw_offset.x;
+    int absy = scissor_start.y - draw_offset.y;
+    int sx = absx * cur_wnd_scale;
+    int sy = absy * cur_wnd_scale;
     int sw = width * cur_wnd_scale;
     int sh = height * cur_wnd_scale;
     int flipped_y = fb_h - (sy + sh); // OpenGL scissor origin to bottom-left
@@ -610,12 +615,8 @@ void Draw_DisplayArea(unsigned int x, unsigned int y) {
     fbrect[fbidx].y = (short)y;
     fbrect[fbidx].w = (short)cur_wnd_width;
     fbrect[fbidx].h = (short)cur_wnd_height;
-    if (fb_index != fbidx) {
-        PresentBufferToScreen(fb_index);
-        SDL_GL_SwapWindow(window);
-        fb_index = fbidx;
-    }
-    glFlush();
+    fb_index = fbidx;
+    Draw_FlushBuffer();
     glBindFramebuffer(GL_FRAMEBUFFER, fb[fb_index]);
     UpdateScissor();
 }
@@ -660,7 +661,6 @@ void Draw_SetDisplayMode(DisplayMode* mode) {
 
 int Draw_ExequeSync() {
     PollEvents();
-    glFlush();
     return 0;
 }
 
@@ -701,14 +701,14 @@ static void Draw_InitBuffer() {
     glEnableVertexAttribArray(1);
     glBindVertexArray(0);
 }
-static inline void Draw_EnsureBufferWillNotOverflow(int vertices, int indices) {
+static void Draw_EnsureBufferWillNotOverflow(int vertices, int indices) {
     bool bufferFull = n_vertices + vertices > MAX_VERTEX_COUNT ||
                       n_indices + indices > MAX_INDEX_COUNT;
     if (bufferFull) {
         Draw_FlushBuffer();
     }
 }
-static inline void Draw_EnqueueBuffer(int vertices, int indices) {
+static void Draw_EnqueueBuffer(int vertices, int indices) {
     bool bufferFull = n_vertices + vertices > MAX_VERTEX_COUNT ||
                       n_indices + indices > MAX_INDEX_COUNT;
     if (n_vertices > 0 && bufferFull) {
@@ -990,11 +990,9 @@ void Draw_SetAreaEnd(int x, int y) {
 }
 void Draw_SetOffset(int x, int y) {
     // implements SetDrawEnv, SetDrawOffset
+    draw_offset.x = x;
+    draw_offset.y = y;
     NOT_IMPLEMENTED;
-}
-static bool DoRectTouch(PS1_RECT* r1, PS1_RECT* r2) {
-    return !(r1->x + r1->w <= r2->x || r2->x + r2->w <= r1->x ||
-             r1->y + r1->h <= r2->y || r2->y + r2->h <= r1->y);
 }
 void Draw_ClearImage(PS1_RECT* rect, u_char r, u_char g, u_char b) {
     int fbidx = GuessFrameBuffer(rect->x, rect->y);

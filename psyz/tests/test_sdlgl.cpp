@@ -49,6 +49,7 @@ class SDLGL_Test : public testing::Test {
         OT_TYPE ot[OTSIZE];
         POLY_FT4 ft4[4];
         POLY_GT4 gt4[4];
+        SPRT sprt[4];
     } DB;
     DB db[2];
     DB* cdb;
@@ -269,4 +270,35 @@ TEST_F(SDLGL_Test, set_draw_area) {
     VSync(0);
     PutDispEnv(&cdb->disp);
     AssertFrame("set_draw_area");
+}
+
+TEST_F(SDLGL_Test, swap_buffer) {
+    u_short tpage, clut;
+    if (LoadTim(img_4bpp, &tpage, &clut)) {
+        return;
+    }
+
+    for (int fbidx = 0; fbidx < 2; fbidx++) {
+        cdb = &db[fbidx&1];
+        cdb->draw.isbg = 1;
+        cdb->draw.tpage = tpage;
+        setRGB0(&cdb->draw, 60, 120, 120);
+        PutDrawEnv(&cdb->draw);
+        PutDispEnv(&cdb->disp);
+
+        SetSprt(cdb->sprt);
+        SetSemiTrans(cdb->sprt, 0);
+        SetShadeTex(cdb->sprt, 1);
+        setXY0(cdb->sprt, 0, fbidx * 16);
+        setWH(cdb->sprt, 64, 64);
+        setUV0(cdb->sprt, 0, 0);
+        cdb->sprt[0].clut = clut;
+        ClearOTag(cdb->ot, OTSIZE);
+        AddPrim(cdb->ot, cdb->sprt);
+        DrawOTag(cdb->ot);
+
+        DrawSync(0);
+        VSync(0);
+        AssertFrame((fbidx & 1) ? "swap_buffer_fb2" : "swap_buffer_fb1");
+    }
 }

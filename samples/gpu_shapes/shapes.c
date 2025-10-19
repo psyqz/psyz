@@ -41,9 +41,9 @@ typedef struct DB {
 
 static void initGraphics(DB* db, int is_pal) {
     SetDefDrawEnv(&db[0].draw, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
-    SetDefDrawEnv(&db[1].draw, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+    SetDefDrawEnv(&db[1].draw, SCREEN_WIDTH, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
     SetDefDispEnv(&db[0].disp, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
-    SetDefDispEnv(&db[1].disp, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+    SetDefDispEnv(&db[1].disp, SCREEN_WIDTH, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
     if (is_pal) {
         db[0].disp.isinter = 1;
         db[1].disp.isinter = 1;
@@ -288,13 +288,13 @@ int main(void) {
         FntPrint("SPRT              SPRT_8   SPRT_16\n");
         FntPrint("\n\n\n\n\n\n\n\n\n");
 
-        DrawSync(0);
-        VSync(0);
         SetDispMask(1);
 
         ClearImage(&cdb->draw.clip, 60, 120, 120);
         DumpOTag(cdb->ot);
         DrawOTag(cdb->ot);
         FntFlush(-1);
+        DrawSync(0);
+        VSync(0);
     }
 }
