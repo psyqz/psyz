@@ -45,7 +45,7 @@ long OpenEvent(unsigned long desc, long spec, long mode, long (*func)()) {
     e->FHandler = func;
     e->system[0] = 0;
     e->system[1] = 0;
-    bool supported = true;
+    int supported = 1;
     switch (desc) {
     case SwCARD:
         switch (spec) {
@@ -58,7 +58,7 @@ long OpenEvent(unsigned long desc, long spec, long mode, long (*func)()) {
             e->status = 0;
             break;
         default:
-            supported = false;
+            supported = 0;
             break;
         }
         break;
@@ -73,12 +73,12 @@ long OpenEvent(unsigned long desc, long spec, long mode, long (*func)()) {
             e->status = 0;
             break;
         default:
-            supported = false;
+            supported = 0;
             break;
         }
         break;
     default:
-        supported = false;
+        supported = 0;
         break;
     }
     if (!supported) {

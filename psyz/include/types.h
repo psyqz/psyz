@@ -34,10 +34,6 @@ typedef unsigned int u32;
 typedef unsigned long long u64;
 
 typedef signed char byte;
-#if !defined(__cplusplus) &&                                                   \
-    (!defined(__STDC_VERSION__) || __STDC_VERSION__ < 201710L)
-typedef enum { false, true } bool;
-#endif
 
 #ifndef NULL
 #define NULL (0)
