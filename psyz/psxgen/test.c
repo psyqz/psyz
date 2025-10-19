@@ -75,9 +75,7 @@ void SetUp() {
     cdb = &db[0];
 }
 
-void TearDown() {
-    ResetGraph(0);
-}
+void TearDown() { ResetGraph(0); }
 
 int main() {
     SetUp();

@@ -46,6 +46,10 @@ clean:
 	rm *.map || true
 	rm undefined_*_auto*.txt || true
 
+.PHONY: format
+format:
+	find src -type f -name '*.c' -exec clang-format -i {} +
+
 .PHONY: expected
 expected: build/psyq$(PSYQ_VER).elf
 	rm -rf expected/ || true

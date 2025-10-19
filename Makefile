@@ -1,11 +1,14 @@
 PSYQ_VER := 470
 PSYQ_SDK := decomp/sdk/psyq$(PSYQ_VER)/LIB/LIBGPU.LIB
 
-.PHONY: build
+.PHONY: build, clean, format
 build: psyq_libs psyq_incs
 clean:
 	cd psyq2elf && git clean -xfd
 	cd nugget && git clean -xfd
+format:
+	cd decomp && make format
+	cd psyz && make format
 
 .PHONY: psyq_libs
 psyq_libs: nugget/psyq/lib/libgpu.a

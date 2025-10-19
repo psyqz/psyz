@@ -8,3 +8,6 @@ $(BUILD_DIR)/libpsyz.a: CMakeLists.txt
 
 clean:
 	rm -rf $(BUILD_DIR)
+
+format:
+	find src psxgen tests -type f -name '*.c' -exec clang-format -i {} +
